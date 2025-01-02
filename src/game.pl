@@ -163,8 +163,8 @@ game_loop(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig), PassCount) :
         % Check valid moves in the movement phase
         valid_moves(game(Board, CurrentPlayer, movement), Moves),
         (Moves = [] ->
-            % No valid moves, pass the turn
-            write(CurrentPlayer), write(' has no valid moves. Passing turn...'), nl,
+            CurrentPlayer = human(Name, _),
+            write(Name), write(' has no valid moves. Passing turn...'), nl,
             next_player(CurrentPlayer, GameConfig, NextPlayer),
             NewPassCount is PassCount + 1,
             (NewPassCount =:= 2 ->
@@ -223,10 +223,10 @@ handle_movement(game(Board, CurrentPlayer, movement, BoardSize, GameConfig),
         (CurrentPlayer = pc(Level) ->
             choose_move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Level, Move),
             write('PC chooses move: '), write(Move), nl,
-            move(game(Board, CurrentPlayer, movement, BoardSize), Move, game(NewBoard, NextPlayer, movement, BoardSize))
+            move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Move, game(NewBoard, NextPlayer, movement, BoardSize, GameConfig), GameConfig)
         ;
             read_move(FromX, FromY, ToX, ToY),
-            (move(game(Board, CurrentPlayer, movement, BoardSize), move(FromX, FromY, ToX, ToY), game(NewBoard, NextPlayer, movement, BoardSize)) ->
+            (move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), move(FromX, FromY, ToX, ToY), game(NewBoard, NextPlayer, movement, BoardSize, GameConfig), GameConfig) ->
                 true
             ;
                 write('Invalid move! Ensure it follows the rules. Try again.'), nl,
@@ -242,20 +242,18 @@ handle_movement(game(Board, CurrentPlayer, movement, BoardSize, GameConfig),
 
 % Validates moves for a given player.
 valid_moves(game(Board, Player, _), Moves) :-
-    % Extract color from the player's structure
     (Player = human(_, Color) ; Player = pc(_, Color)),
-
-    % Find all valid moves for the player's color
     findall(move(FromX, FromY, ToX, ToY), (
         between(1, 5, FromX),
         between(1, 5, FromY),
-        piece_at(Board, FromX, FromY, Color), % Check if the piece belongs to the player
+        piece_at(Board, FromX, FromY, Color),
         get_adjacent_cells(Board, FromX, FromY, AdjacentCells),
         member((ToX, ToY), AdjacentCells),
         is_valid_destination(Board, ToX, ToY)
     ), Moves),
     % Debug output
-    write('Debug: Valid moves for '), write(Player), write(': '), write(Moves), nl.
+    Player = human(Name, _),
+    write('Debug: Valid moves for '), write(Name), write(': '), write(Moves), nl.
 
 % Checks if a move is valid.
 valid_move(Board, Player, move(FromX, FromY, ToX, ToY)) :-
@@ -288,10 +286,10 @@ get_adjacent_cells(Board, X, Y, AdjacentCells) :-
 % ===================== STACK OPERATIONS =====================
 
 % Validates and executes a move, returning the new game state
-move(game(Board, Player, Phase, BoardSize), move(FromX, FromY, ToX, ToY), game(NewBoard, NextPlayer, Phase, BoardSize)) :-
+move(game(Board, Player, Phase, BoardSize, GameConfig), move(FromX, FromY, ToX, ToY), game(NewBoard, NextPlayer, Phase, BoardSize, GameConfig), GameConfig) :-
     valid_move(Board, Player, move(FromX, FromY, ToX, ToY)),
     execute_move(Board, FromX, FromY, ToX, ToY, NewBoard),
-    next_player(Player, NextPlayer).
+    next_player(Player, GameConfig, NextPlayer).
 
 
 % Get stack from position
@@ -335,7 +333,7 @@ choose_move(GameState, 1, Move) :-
     random_member(Move, Moves).
 choose_move(GameState, 2, Move) :-
     valid_moves(GameState, Moves),
-    findall(Value-M, (member(M, Moves), move(GameState, M, NewGameState), value(NewGameState, Player, Value)), ValuedMoves),
+    findall(Value-M, (member(M, Moves), move(GameState, M, NewGameState, GameConfig), value(NewGameState, Player, Value)), ValuedMoves),
     keysort(ValuedMoves, SortedMoves),
     last(SortedMoves, _-Move).
 
@@ -351,7 +349,6 @@ next_player(pc(Level2, Color2), game_config(pc(Level1, Color1), pc(Level2, Color
 next_player(human(Name, Color1), game_config(human(Name, Color1), pc(Level, Color2), _), pc(Level, Color2)).
 next_player(pc(Level, Color2), game_config(human(Name, Color1), pc(Level, Color2), _), human(Name, Color1)).
 
-
 % ===================== GAME STATE CHECKS =====================
 
 % Checks if the game is over (no valid moves for both players).
@@ -366,19 +363,52 @@ game_over(game(Board, _, movement, _, GameConfig), Winner) :-
 game_over(_, _) :-
     fail. % Continue the game if there are valid moves.
 
+% Determines the winner based on the tallest stack, highest total stacks, and most pieces.
 determine_winner(Board, game_config(Player1, Player2, _), Winner) :-
     % Collect all stack heights and their respective colors
-    findall(Height-Color, tallest_stack(Board, Color, Height), Heights),
+    findall(Height-Color, (
+        member(Row, Board),
+        member(Stack, Row),
+        Stack = [Color|_], % Get the color of the top piece
+        length(Stack, Height)
+    ), Heights),
+    
+    % Sort and reverse to find the tallest stack(s)
     keysort(Heights, SortedHeights),
     reverse(SortedHeights, [MaxHeight-Color|Rest]),
 
-    % Check for tie conditions
-    (Rest = [MaxHeight-_|_] ->
-        Winner = 'Draw' % Multiple tallest stacks of the same height
-    ;
-        (Color = blue -> Player1 = human(Name, blue), Winner = Name
-        ; Color = white -> Player2 = human(Name, white), Winner = Name
-        ; Winner = 'PC') % Handle PC case
+    % Collect all players with the tallest stack
+    findall(Player, (
+        member(MaxHeight-PlayerColor, [MaxHeight-Color|Rest]),
+        PlayerColor = blue,
+        Player = Player1
+    ;   PlayerColor = white,
+        Player = Player2
+    ), TallestPlayers),
+
+    % Tie-break based on total stacks of the tallest height
+    (TallestPlayers = [Winner] ->
+        true % Single winner
+    ;   
+        findall(TotalHeight-Player, (
+            member(Player, TallestPlayers),
+            count_tallest_stacks(Board, MaxHeight, Player, TotalHeight)
+        ), TotalStacks),
+        keysort(TotalStacks, SortedStacks),
+        reverse(SortedStacks, [_-Winner|RestTotalStacks]),
+
+        % Further tie-break based on total pieces
+        (RestTotalStacks = [_-_|_] ->
+            findall(TotalPieces-Player, (
+                member(Player, TallestPlayers),
+                (Player = human(_, blue) -> Color = blue ; Color = white),
+                count_pieces(Board, Color, TotalPieces)
+            ), TotalPiecesCount),
+            keysort(TotalPiecesCount, SortedPieces),
+            reverse(SortedPieces, [_-Winner|_]) % Final winner
+        ;
+            true % Winner determined by highest total stacks
+        )
     ).
 
 % Finds the tallest stack for a player.
@@ -440,7 +470,7 @@ add_player_piece(Board, X, Y, human(_, Color), NewBoard) :-
     nth1(BoardY, Board, Row, RestRows),
     nth1(BoardX, Row, Stack, RestCells),
     Stack = [neutral|RestStack],
-    nth1(BoardX, NewRow, [Color|RestStack], RestCells),
+    nth1(BoardX, NewRow, [Color, neutral|RestStack], RestCells),
     nth1(BoardY, NewBoard, NewRow, RestRows).
 
 add_player_piece(Board, X, Y, pc(_, Color), NewBoard) :-
@@ -449,7 +479,7 @@ add_player_piece(Board, X, Y, pc(_, Color), NewBoard) :-
     nth1(BoardY, Board, Row, RestRows),
     nth1(BoardX, Row, Stack, RestCells),
     Stack = [neutral|RestStack],
-    nth1(BoardX, NewRow, [Color|RestStack], RestCells),
+    nth1(BoardX, NewRow, [Color, neutral|RestStack], RestCells),
     nth1(BoardY, NewBoard, NewRow, RestRows).
 
 % Checks if a placement is valid.
@@ -475,6 +505,17 @@ count_pieces(Board, Color, Count) :-
         member(Color, Stack) % Count all occurrences of the color in the stack
     ), Pieces),
     length(Pieces, Count).
+
+% Counts the total stacks of a given height for a specific player.
+count_tallest_stacks(Board, MaxHeight, Player, TotalHeight) :-
+    (Player = human(_, Color) ; Player = pc(_, Color)),
+    findall(1, (
+        member(Row, Board),
+        member(Stack, Row),
+        Stack = [Color|_], % Stack belongs to the player
+        length(Stack, MaxHeight) % Stack is of the tallest height
+    ), Stacks),
+    length(Stacks, TotalHeight).
 
 % Checks if a piece is at a specific position
 piece_at(Board, X, Y, Player) :-
