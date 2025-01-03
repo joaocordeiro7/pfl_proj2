@@ -23,8 +23,9 @@ play :-
     ;
         write('1. Human vs Human'), nl,
         write('2. Human vs PC'), nl,
-        write('3. PC vs PC'), nl,
-        write('Choose an option (1-3): '), nl,
+        write('3. PC vs Human'), nl,
+        write('4. PC vs PC'), nl,
+        write('Choose an option (1-4): '), nl,
         get_clean_char(GameModeChar),
         handle_option(GameModeChar, BoardSize)
     ).
@@ -46,19 +47,30 @@ handle_option('2', BoardSize) :-
     write('Choose difficulty level for PC (1-2): '), nl,
     get_clean_char(LevelChar),
     char_to_number(LevelChar, Level),
-    GameConfig = game_config(human(Player1Name, blue), pc(Level, white), BoardSize),
+    GameConfig = game_config(human(Player1Name, blue), pc(Level, white, 'PCWhite'), BoardSize),
+    initial_state(GameConfig, GameState),
+    game_loop(GameState, 0).
+
+% Handles PC vs Human
+handle_option('3', BoardSize) :-
+    write('Choose difficulty level for PC (1-2): '), nl,
+    get_clean_char(LevelChar),
+    char_to_number(LevelChar, Level),
+    write('Enter name for Player 2 (White): '), 
+    read_line(user_input, Player2NameCodes), atom_codes(Player2Name, Player2NameCodes),
+    GameConfig = game_config(pc(Level, blue, 'PCBlue'), human(Player2Name, white), BoardSize),
     initial_state(GameConfig, GameState),
     game_loop(GameState, 0).
 
 % Handles PC vs PC
-handle_option('3', BoardSize) :-
-    write('Choose difficulty level for PC 1 (1-2): '), nl,
+handle_option('4', BoardSize) :-
+    write('Choose difficulty level for PC Blue (1-2): '), nl,
     get_clean_char(Level1Char),
     char_to_number(Level1Char, Level1),
-    write('Choose difficulty level for PC 2 (1-2): '), nl,
+    write('Choose difficulty level for PC White (1-2): '), nl,
     get_clean_char(Level2Char),
     char_to_number(Level2Char, Level2),
-    GameConfig = game_config(pc(Level1, blue), pc(Level2, white), BoardSize),
+    GameConfig = game_config(pc(Level1, blue, 'PCBlue'), pc(Level2, white, 'PCWhite'), BoardSize),
     initial_state(GameConfig, GameState),
     game_loop(GameState, 0).
 
@@ -86,7 +98,8 @@ display_game(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig)) :-
     (CurrentPlayer = human(Name, _) ->
         write('Current Player: '), write(Name), nl
     ;
-        write('Current Player: PC'), nl
+        CurrentPlayer = pc(_, _, PCName),
+        write('Current Player: '), write(PCName), nl
     ),
     write('Phase: '), write(Phase), nl, nl,
     reverse(Board, InvertedBoard), % Reverse rows for lower-left corner
@@ -186,11 +199,17 @@ game_loop(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig), PassCount) :
 
 handle_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), 
                  game(NewBoard, NextPlayer, NewPhase, BoardSize, GameConfig)) :-
-    write('PLACE YOUR PIECE'), nl,
-    write('Instructions: Choose a position (X Y) to place your piece on top of a neutral stack.'), nl,
-    read_placement(X, Y),
+    (CurrentPlayer = pc(Level, _, _) ->
+        % PC makes a placement decision
+        choose_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), Level, X, Y),
+        write('PC places piece at: ('), write(X), write(', '), write(Y), write(')'), nl
+    ;
+        % Human makes a placement decision
+        write('PLACE YOUR PIECE'), nl,
+        write('Instructions: Choose a position (X Y) to place your piece on top of a neutral stack.'), nl,
+        read_placement(X, Y)
+    ),
     (valid_placement(Board, X, Y) ->
-        % Add the piece for the current player
         add_player_piece(Board, X, Y, CurrentPlayer, NewBoard),
         pieces_per_player(BoardSize, PiecesPerPlayer),
         (all_pieces_placed(NewBoard, PiecesPerPlayer) ->
@@ -199,15 +218,12 @@ handle_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig),
         ;
             NewPhase = placement
         ),
-        % Switch to the next player
         next_player(CurrentPlayer, GameConfig, NextPlayer)
     ;
-        % Invalid placement, retry
         write('Invalid placement! Ensure it is on a neutral stack. Try again.'), nl,
         handle_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), 
                          game(NewBoard, NextPlayer, NewPhase, BoardSize, GameConfig))
     ).
-
 
 % Handles the movement phase with user instructions.
 handle_movement(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), 
@@ -269,15 +285,19 @@ is_valid_destination(Board, X, Y) :-
     nth1(Y, Board, Row),
     nth1(X, Row, Stack),
     length(Stack, Height),
-    Height = 1. % Ensure the target is a neutral stack.
+    Height = 1. 
 
-% Get all valid adjacent cells as a list
+% Get all valid adjacent cells as a list, including diagonal moves
 get_adjacent_cells(Board, X, Y, AdjacentCells) :-
     findall((ToX, ToY), (
         (ToX is X + 1, ToY = Y);
         (ToX is X - 1, ToY = Y);
         (ToX = X, ToY is Y + 1);
-        (ToX = X, ToY is Y - 1)
+        (ToX = X, ToY is Y - 1);
+        (ToX is X + 1, ToY is Y + 1); 
+        (ToX is X - 1, ToY is Y + 1); 
+        (ToX is X + 1, ToY is Y - 1); 
+        (ToX is X - 1, ToY is Y - 1)  
     ), PossibleCells),
     findall((ValidX, ValidY), 
         (member((ValidX, ValidY), PossibleCells), within_bounds(Board, ValidX, ValidY)), 
@@ -327,6 +347,41 @@ execute_move(Board, FromX, FromY, ToX, ToY, NewBoard) :-
 
 % ===================== PC MOVE GENERATION =====================
 
+% Level 1: Random Placement
+choose_placement(game(Board, _, _, _, _), 1, X, Y) :-
+    findall((Row, Col), (
+        between(1, 5, Row),
+        between(1, 5, Col),
+        valid_placement(Board, Row, Col)
+    ), ValidPlacements),
+    random_member((X, Y), ValidPlacements).
+
+% Level 2: Strategic Placement
+choose_placement(game(Board, CurrentPlayer, _, _, _), 2, X, Y) :-
+    (CurrentPlayer = pc(_, Color, _) ; CurrentPlayer = human(_, Color)),
+    findall((Row, Col), (
+        between(1, 5, Row),
+        between(1, 5, Col),
+        valid_placement(Board, Row, Col)
+    ), ValidPlacements),
+    findall(Value-(Row, Col), (
+        member((Row, Col), ValidPlacements),
+        simulate_placement(Board, Row, Col, Color, Value)
+    ), ValuedPlacements),
+    keysort(ValuedPlacements, SortedPlacements),
+    last(SortedPlacements, _-(X, Y)).
+
+% Simulates the value of a placement
+simulate_placement(Board, X, Y, Color, Value) :-
+    add_player_piece(Board, X, Y, pc(_, Color, _), NewBoard),
+    findall(Height, (
+        member(Row, NewBoard),
+        member(Stack, Row),
+        Stack = [Color|_],
+        length(Stack, Height)
+    ), Heights),
+    max_list(Heights, Value).
+
 % Chooses a move for the computer player based on the difficulty level
 choose_move(GameState, 1, Move) :-
     valid_moves(GameState, Moves),
@@ -340,15 +395,25 @@ choose_move(GameState, 2, Move) :-
 % ===================== PLAYER MANAGEMENT =====================
 
 % Switches to the next player based on the game configuration.
-next_player(human(Name1, Color1), game_config(human(Name1, Color1), human(Name2, Color2), _), human(Name2, Color2)).
-next_player(human(Name2, Color2), game_config(human(Name1, Color1), human(Name2, Color2), _), human(Name1, Color1)).
 
-next_player(pc(Level1, Color1), game_config(pc(Level1, Color1), pc(Level2, Color2), _), pc(Level2, Color2)).
-next_player(pc(Level2, Color2), game_config(pc(Level1, Color1), pc(Level2, Color2), _), pc(Level1, Color1)).
-
-next_player(human(Name, Color1), game_config(human(Name, Color1), pc(Level, Color2), _), pc(Level, Color2)).
-next_player(pc(Level, Color2), game_config(human(Name, Color1), pc(Level, Color2), _), human(Name, Color1)).
-
+next_player(human(Name1, Color1), game_config(human(Name1, Color1), human(Name2, Color2), _), human(Name2, Color2)) :-
+    format('Debug: Switching from ~w to ~w~n', [human(Name1, Color1), human(Name2, Color2)]).
+next_player(human(Name2, Color2), game_config(human(Name1, Color1), human(Name2, Color2), _), human(Name1, Color1)) :-
+    format('Debug: Switching from ~w to ~w~n', [human(Name2, Color2), human(Name1, Color1)]).
+% Switch between two PC players
+next_player(pc(Level1, Color1, Name1), game_config(pc(Level1, Color1, Name1), pc(Level2, Color2, Name2), _), pc(Level2, Color2, Name2)) :-
+    format('Debug: Switching from ~w to ~w~n', [pc(Level1, Color1, Name1), pc(Level2, Color2, Name2)]).
+next_player(pc(Level2, Color2, Name2), game_config(pc(Level1, Color1, Name1), pc(Level2, Color2, Name2), _), pc(Level1, Color1, Name1)) :-
+    format('Debug: Switching from ~w to ~w~n', [pc(Level2, Color2, Name2), pc(Level1, Color1, Name1)]).
+% Switch between a human and a PC player
+next_player(human(Name, Color1), game_config(human(Name, Color1), pc(Level, Color2, PCName), _), pc(Level, Color2, PCName)) :-
+    format('Debug: Switching from ~w to ~w~n', [human(Name, Color1), pc(Level, Color2, PCName)]).
+next_player(pc(Level, Color2, PCName), game_config(human(Name, Color1), pc(Level, Color2, PCName), _), human(Name, Color1)) :-
+    format('Debug: Switching from ~w to ~w~n', [pc(Level, Color2, PCName), human(Name, Color1)]).
+next_player(pc(Level, Color1, PCName), game_config(pc(Level, Color1, PCName), human(Name, Color2), _), human(Name, Color2)) :-
+    format('Debug: Switching from ~w to ~w~n', [pc(Level, Color1, PCName), human(Name, Color2)]).
+next_player(human(Name, Color2), game_config(pc(Level, Color1, PCName), human(Name, Color2), _), pc(Level, Color1, PCName)) :-
+    format('Debug: Switching from ~w to ~w~n', [human(Name, Color2), pc(Level, Color1, PCName)]).
 % ===================== GAME STATE CHECKS =====================
 
 % Checks if the game is over (no valid moves for both players).
@@ -473,7 +538,7 @@ add_player_piece(Board, X, Y, human(_, Color), NewBoard) :-
     nth1(BoardX, NewRow, [Color, neutral|RestStack], RestCells),
     nth1(BoardY, NewBoard, NewRow, RestRows).
 
-add_player_piece(Board, X, Y, pc(_, Color), NewBoard) :-
+add_player_piece(Board, X, Y, pc(_, Color, _), NewBoard) :-
     transform_coordinates(X, Y, BoardX, BoardY),
     within_bounds(Board, BoardX, BoardY),
     nth1(BoardY, Board, Row, RestRows),
@@ -486,7 +551,8 @@ add_player_piece(Board, X, Y, pc(_, Color), NewBoard) :-
 valid_placement(Board, X, Y) :-
     within_bounds(Board, X, Y),
     nth1(Y, Board, Row),
-    nth1(X, Row, [neutral|_]).
+    nth1(X, Row, Stack),
+    Stack = [neutral|_].
 
 % Checks if all pieces are placed.
 all_pieces_placed(Board, PiecesPerPlayer) :-

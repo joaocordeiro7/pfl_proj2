@@ -1,5 +1,4 @@
-não se pode mover para espaços brancos
-diagonais?
+input handling
 
 
 # PFL - 2º Trabalho Prático
