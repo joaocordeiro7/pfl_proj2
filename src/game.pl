@@ -607,3 +607,14 @@ piece_at(Board, X, Y, Player) :-
 
 pieces_per_player(BoardSize, PiecesPerPlayer) :-
     PiecesPerPlayer is BoardSize - 1.
+
+max_list([H|T], Max) :-
+    max_list(T, H, Max).
+
+max_list([], Max, Max).
+max_list([H|T], CurrentMax, Max) :-
+    H > CurrentMax,
+    max_list(T, H, Max).
+max_list([H|T], CurrentMax, Max) :-
+    H =< CurrentMax,
+    max_list(T, CurrentMax, Max).
