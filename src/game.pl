@@ -184,9 +184,9 @@ process_phase(movement, GameState, PassCount) :-
 
 handle_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), 
                  game(NewBoard, NextPlayer, NewPhase, BoardSize, GameConfig)) :-
-    CurrentPlayer = pc(Level, _, _),
-    write('PC is thinking...'), nl,
-    sleep(3),
+    CurrentPlayer = pc(Level, _, Name),
+    write(Name), write(' is thinking...'), nl,
+    sleep(2),
     choose_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), Level, X, Y),
     write('PC places piece at: ('), write(X), write(', '), write(Y), write(')'), nl,
     sleep(1),
@@ -242,9 +242,10 @@ handle_pass_end(Board, NextPlayer, Phase, BoardSize, GameConfig, 2) :-
 handle_pass_end(Board, NextPlayer, Phase, BoardSize, GameConfig, PassCount) :-
     game_loop(game(Board, NextPlayer, Phase, BoardSize, GameConfig), PassCount).
 
-handle_player_move(Moves, pc(Level), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
-    write('PC is thinking...'), nl,
-    sleep(3),
+handle_player_move(Moves, pc(Level, Color, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
+    CurrentPlayer = pc(Level, _, Name),
+    write(Name), write(' is thinking...'), nl,
+    sleep(2),
     choose_move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Level, Move),
     write('PC chooses move: '), write(Move), nl,
     sleep(1),
@@ -276,10 +277,7 @@ valid_moves(game(Board, Player, _), Moves) :-
         get_adjacent_cells(Board, FromX, FromY, AdjacentCells),
         member((ToX, ToY), AdjacentCells),
         is_valid_destination(Board, ToX, ToY)
-    ), Moves),
-    % Debug output
-    Player = human(Name, _),
-    write('Debug: Valid moves for '), write(Name), write(': '), write(Moves), nl.
+    ), Moves).
 
 % Checks if a move is valid.
 valid_move(Board, Player, move(FromX, FromY, ToX, ToY)) :-
@@ -358,9 +356,7 @@ execute_move(Board, FromX, FromY, ToX, ToY, NewBoard) :-
     transform_coordinates(ToX, ToY, BoardToX, BoardToY),
     get_stack(Board, BoardFromX, BoardFromY, Stack),
     remove_stack(Board, BoardFromX, BoardFromY, TempBoard),
-    add_to_stack(TempBoard, BoardToX, BoardToY, Stack, NewBoard),
-    write(' from ('), write(FromX), write(','), write(FromY),
-    write(') to ('), write(ToX), write(','), write(ToY), write(')'), nl.
+    add_to_stack(TempBoard, BoardToX, BoardToY, Stack, NewBoard).
 
 % ===================== PC MOVE GENERATION =====================
 
@@ -414,6 +410,14 @@ crowding_penalty(Board, X, Y, Color, Penalty) :-
     count_occurrences(Color, Neighbors, Count),
     Penalty is Count * 2. % Penalty proportional to nearby same-color stacks
 
+% Helper predicate to count occurrences of an element
+count_occurrences(_, [], 0).
+count_occurrences(Element, [Element|Rest], Count) :-
+    count_occurrences(Element, Rest, RestCount),
+    Count is RestCount + 1.
+count_occurrences(Element, [_|Rest], Count) :-
+    count_occurrences(Element, Rest, Count).
+
 % Calculates neighbor positions
 neighbor_positions(X, Y, NX, NY) :-
     (NX is X + 1, NY = Y);
@@ -434,28 +438,19 @@ board_center(Board, CenterX, CenterY) :-
 
 % Level 1: Random valid move
 choose_move(game(Board, CurrentPlayer, movement, _, _), 1, Move) :-
-    write('Debug: Choosing random move'), nl,
     valid_moves(game(Board, CurrentPlayer, movement), Moves),
-    (random_member(Move, Moves) ->
-        true
-    ;
-        write('Debug: No valid moves for PC.'), nl, fail
-    ).
+    random_member(Move, Moves).
 
 % Level 2: Strategic move
 choose_move(game(Board, CurrentPlayer, movement, _, _), 2, Move) :-
-    write('Debug: Choosing strategic move'), nl,
-    (CurrentPlayer = pc(_, Color, _)),
+    CurrentPlayer = pc(_, Color, _),
     valid_moves(game(Board, CurrentPlayer, movement), Moves),
     findall(Value-M, (
         member(M, Moves),
         simulate_move(Board, M, Color, Value)
     ), ValuedMoves),
-    (keysort(ValuedMoves, SortedMoves), last(SortedMoves, _-Move) ->
-        true
-    ;
-        write('Debug: No valid moves or scoring issue.'), nl, fail
-    ).
+    keysort(ValuedMoves, SortedMoves),
+    last(SortedMoves, _-Move).
 
 % Simulates the value of a move
 simulate_move(Board, move(FromX, FromY, ToX, ToY), Color, Value) :-
@@ -477,27 +472,18 @@ value(Board, Color, Value) :-
 
 
 % ===================== PLAYER MANAGEMENT =====================
-
 % Switches to the next player based on the game configuration.
-
-next_player(human(Name1, Color1), game_config(human(Name1, Color1), human(Name2, Color2), _), human(Name2, Color2)) :-
-    format('Debug: Switching from ~w to ~w~n', [human(Name1, Color1), human(Name2, Color2)]).
-next_player(human(Name2, Color2), game_config(human(Name1, Color1), human(Name2, Color2), _), human(Name1, Color1)) :-
-    format('Debug: Switching from ~w to ~w~n', [human(Name2, Color2), human(Name1, Color1)]).
+next_player(human(Name1, Color1), game_config(human(Name1, Color1), human(Name2, Color2), _), human(Name2, Color2)).
+next_player(human(Name2, Color2), game_config(human(Name1, Color1), human(Name2, Color2), _), human(Name1, Color1)).
 % Switch between two PC players
-next_player(pc(Level1, Color1, Name1), game_config(pc(Level1, Color1, Name1), pc(Level2, Color2, Name2), _), pc(Level2, Color2, Name2)) :-
-    format('Debug: Switching from ~w to ~w~n', [pc(Level1, Color1, Name1), pc(Level2, Color2, Name2)]).
-next_player(pc(Level2, Color2, Name2), game_config(pc(Level1, Color1, Name1), pc(Level2, Color2, Name2), _), pc(Level1, Color1, Name1)) :-
-    format('Debug: Switching from ~w to ~w~n', [pc(Level2, Color2, Name2), pc(Level1, Color1, Name1)]).
+next_player(pc(Level1, Color1, Name1), game_config(pc(Level1, Color1, Name1), pc(Level2, Color2, Name2), _), pc(Level2, Color2, Name2)).
+next_player(pc(Level2, Color2, Name2), game_config(pc(Level1, Color1, Name1), pc(Level2, Color2, Name2), _), pc(Level1, Color1, Name1)).
 % Switch between a human and a PC player
-next_player(human(Name, Color1), game_config(human(Name, Color1), pc(Level, Color2, PCName), _), pc(Level, Color2, PCName)) :-
-    format('Debug: Switching from ~w to ~w~n', [human(Name, Color1), pc(Level, Color2, PCName)]).
-next_player(pc(Level, Color2, PCName), game_config(human(Name, Color1), pc(Level, Color2, PCName), _), human(Name, Color1)) :-
-    format('Debug: Switching from ~w to ~w~n', [pc(Level, Color2, PCName), human(Name, Color1)]).
-next_player(pc(Level, Color1, PCName), game_config(pc(Level, Color1, PCName), human(Name, Color2), _), human(Name, Color2)) :-
-    format('Debug: Switching from ~w to ~w~n', [pc(Level, Color1, PCName), human(Name, Color2)]).
-next_player(human(Name, Color2), game_config(pc(Level, Color1, PCName), human(Name, Color2), _), pc(Level, Color1, PCName)) :-
-    format('Debug: Switching from ~w to ~w~n', [human(Name, Color2), pc(Level, Color1, PCName)]).
+next_player(human(Name, Color1), game_config(human(Name, Color1), pc(Level, Color2, PCName), _), pc(Level, Color2, PCName)).
+next_player(pc(Level, Color2, PCName), game_config(human(Name, Color1), pc(Level, Color2, PCName), _), human(Name, Color1)).
+next_player(pc(Level, Color1, PCName), game_config(pc(Level, Color1, PCName), human(Name, Color2), _), human(Name, Color2)).
+next_player(human(Name, Color2), game_config(pc(Level, Color1, PCName), human(Name, Color2), _), pc(Level, Color1, PCName)).
+
 % ===================== GAME STATE CHECKS =====================
 
 % Checks if the game is over (no valid moves for both players).
@@ -637,8 +623,6 @@ valid_placement(Board, X, Y) :-
 all_pieces_placed(Board, PiecesPerPlayer) :-
     count_pieces(Board, blue, BlueCount),
     count_pieces(Board, white, WhiteCount),
-    write('Debug: Blue pieces placed = '), write(BlueCount), nl,
-    write('Debug: White pieces placed = '), write(WhiteCount), nl,
     BlueCount =:= PiecesPerPlayer,
     WhiteCount =:= PiecesPerPlayer.
 
