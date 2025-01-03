@@ -26,7 +26,7 @@ O jogo inicia-se com o predicado play/0:
 **STAQS** é um jogo de tabuleiro estratégico para dois jogadores. É jogado num tabuleiro 5 por 5 em que cada jogador tem 4 peças empilháveis. O jogo começa com 25 peças neutras, uma por cada casa do tabuleiro. A princípio, à vez, cada jogador deve posicionar uma das suas peças em cima de uma das peças neutras até as 8 peças estarem colocadas. A partir daí, na sua vez, o jogador deve mover uma das suas pilhas (incluindo as peças neutras) uma casa, para cima de outra peça neutra. 
 
 **Principais regras:**
-* Uma pilha só se pode mover para uma 8 casas que fazem extrita fronteira com a casa onde está inicialmente, ou seja, pode mover-se na vertical, horizontal ou diagonal;
+* Uma pilha só se pode mover para uma das 8 casas que fazem extrita fronteira com a casa onde está inicialmente, ou seja, pode mover-se na vertical, horizontal ou diagonal;
 * Uma pilha não pode saltar para cima de outra pilha ou mover-se para espaços vazios, ou seja, só se pode mover para uma casa com exatamente uma peça neutra;
 * Se um jogador não puder mover nenhuma das suas pilhas, deve passar;
 * Se ambos os jogadores passarem consecutivamente, o jogo termina.

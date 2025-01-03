@@ -2,6 +2,7 @@
 :- use_module(library(random)).
 :- use_module(library(lists)).
 :- use_module(library(between)).
+:- use_module(library(system)).
 
 % ===================== GAME SETUP AND ENTRY POINT =====================
 
@@ -17,18 +18,21 @@ play :-
     write('Choose board size (N for NxN grid): '), nl,
     get_clean_char(BoardSizeChar),
     char_to_number(BoardSizeChar, BoardSize),
-    (BoardSize < 3 ->
-        write('Invalid size. The board must be at least 3x3.'), nl,
-        play
-    ;
+    validate_board_size(BoardSize),
         write('1. Human vs Human'), nl,
         write('2. Human vs PC'), nl,
         write('3. PC vs Human'), nl,
         write('4. PC vs PC'), nl,
         write('Choose an option (1-4): '), nl,
         get_clean_char(GameModeChar),
-        handle_option(GameModeChar, BoardSize)
-    ).
+        handle_option(GameModeChar, BoardSize).
+
+% Validates the input for board size
+validate_board_size(BoardSize) :-
+    BoardSize >= 3, !.
+validate_board_size(_) :-
+    write('Invalid size. The board must be at least 3x3.'), nl, nl, nl,
+    play. 
 
 % Handles Human vs Human
 handle_option('1', BoardSize) :-
@@ -95,12 +99,7 @@ create_row(Size, Row) :-
 % Displays the game board with labeled rows and columns.
 display_game(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig)) :-
     nl,
-    (CurrentPlayer = human(Name, _) ->
-        write('Current Player: '), write(Name), nl
-    ;
-        CurrentPlayer = pc(_, _, PCName),
-        write('Current Player: '), write(PCName), nl
-    ),
+    display_current_player(CurrentPlayer),
     write('Phase: '), write(Phase), nl, nl,
     reverse(Board, InvertedBoard), % Reverse rows for lower-left corner
     print_separator(BoardSize),
@@ -110,8 +109,8 @@ display_game(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig)) :-
 % Displays the current player information.
 display_current_player(human(Name, _)) :-
     write('Current Player: '), write(Name), nl.
-display_current_player(pc(_, _)) :-
-    write('Current Player: PC'), nl.
+display_current_player(pc(_, _, PCName)) :-
+    write('Current Player: '), write(PCName), nl.
 
 % Prints the board row by row with row numbers.
 print_board([], _, _).
@@ -185,31 +184,40 @@ process_phase(movement, GameState, PassCount) :-
 
 handle_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), 
                  game(NewBoard, NextPlayer, NewPhase, BoardSize, GameConfig)) :-
-    (CurrentPlayer = pc(Level, _, _) ->
-        % PC makes a placement decision
-        choose_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), Level, X, Y),
-        write('PC places piece at: ('), write(X), write(', '), write(Y), write(')'), nl
-    ;
-        % Human makes a placement decision
-        write('PLACE YOUR PIECE'), nl,
-        write('Instructions: Choose a position (X Y) to place your piece on top of a neutral stack.'), nl,
-        read_placement(X, Y)
-    ),
-    (valid_placement(Board, X, Y) ->
-        add_player_piece(Board, X, Y, CurrentPlayer, NewBoard),
-        pieces_per_player(BoardSize, PiecesPerPlayer),
-        (all_pieces_placed(NewBoard, PiecesPerPlayer) ->
-            NewPhase = movement,
-            write('All pieces placed. Transitioning to movement phase!'), nl
-        ;
-            NewPhase = placement
-        ),
-        next_player(CurrentPlayer, GameConfig, NextPlayer)
-    ;
-        write('Invalid placement! Ensure it is on a neutral stack. Try again.'), nl,
-        handle_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), 
-                         game(NewBoard, NextPlayer, NewPhase, BoardSize, GameConfig))
-    ).
+    CurrentPlayer = pc(Level, _, _),
+    write('PC is thinking...'), nl,
+    sleep(3),
+    choose_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), Level, X, Y),
+    write('PC places piece at: ('), write(X), write(', '), write(Y), write(')'), nl,
+    sleep(1),
+    process_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), X, Y, NewBoard, NextPlayer, NewPhase).
+
+handle_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), 
+                 game(NewBoard, NextPlayer, NewPhase, BoardSize, GameConfig)) :-
+    CurrentPlayer = human(_, _),
+    write('PLACE YOUR PIECE'), nl,
+    write('Instructions: Choose a position (X Y) to place your piece on top of a neutral stack.'), nl,
+    read_placement(X, Y),
+    process_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), X, Y, NewBoard, NextPlayer, NewPhase).
+
+process_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), X, Y, NewBoard, NextPlayer, movement) :-
+    valid_placement(Board, X, Y),
+    add_player_piece(Board, X, Y, CurrentPlayer, NewBoard),
+    pieces_per_player(BoardSize, PiecesPerPlayer),
+    all_pieces_placed(NewBoard, PiecesPerPlayer),
+    write('All pieces placed. Transitioning to movement phase!'), nl,
+    next_player(CurrentPlayer, GameConfig, NextPlayer).
+
+process_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), X, Y, NewBoard, NextPlayer, placement) :-
+    valid_placement(Board, X, Y),
+    add_player_piece(Board, X, Y, CurrentPlayer, NewBoard),
+    pieces_per_player(BoardSize, PiecesPerPlayer),
+    \+ all_pieces_placed(NewBoard, PiecesPerPlayer),
+    next_player(CurrentPlayer, GameConfig, NextPlayer).
+
+process_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), _, _, Board, CurrentPlayer, placement) :-
+    \+ valid_placement(Board, X, Y),
+    write('Invalid placement! Ensure it is on a neutral stack. Try again.'), nl.
 
 % Handles the movement phase with user instructions.
 handle_movement(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), PassCount) :-
@@ -230,26 +238,19 @@ handle_movement_moves(Moves, GameState, _) :-
 
 % Ends the turn when passes reach 2 or transitions to the next player.
 handle_pass_end(Board, NextPlayer, Phase, BoardSize, GameConfig, 2) :-
-    determine_winner(Board, GameConfig, Winner),
-    write('Game over! Winner: '), write(Winner), nl.
+    game_over(game(Board, NextPlayer, Phase, BoardSize, GameConfig), Winner).
 handle_pass_end(Board, NextPlayer, Phase, BoardSize, GameConfig, PassCount) :-
     game_loop(game(Board, NextPlayer, Phase, BoardSize, GameConfig), PassCount).
 
-% Executes the move for a PC player based on their level.
-handle_player_move(Moves, pc(Level, Color, Name), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
-    write(Name), write(' is thinking...'), nl,
+handle_player_move(Moves, pc(Level), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
+    write('PC is thinking...'), nl,
+    sleep(3),
     choose_move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Level, Move),
-    write(Name), write(' chooses move: '), write(Move), nl,
-    (move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Move, NewGameState, GameConfig) ->
-        game_loop(NewGameState, 0)
-    ;
-        write('Error: PC move failed. Retrying...'), nl,
-        handle_player_move(Moves, pc(Level, Color, Name), game(Board, CurrentPlayer, movement, BoardSize, GameConfig))
-    ).
-
-% Prompts and processes move for a Human player.
-handle_player_move(_, human(Name, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
-    write(Name), write(', it\'s your turn!'), nl,
+    write('PC chooses move: '), write(Move), nl,
+    sleep(1),
+    move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Move, NewGameState, GameConfig),
+    game_loop(NewGameState, 0).
+handle_player_move(_, human(_, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
     write('MOVE YOUR STACK'), nl,
     write('Instructions: Choose a move (FromX FromY ToX ToY).'), nl,
     read_move(FromX, FromY, ToX, ToY),
@@ -291,7 +292,7 @@ valid_move(Board, Player, move(FromX, FromY, ToX, ToY)) :-
 
 % Determine the player's color
 player_color(human(_, Color), Color).
-player_color(pc(_, Color), Color).
+player_color(pc(_, Color, _), Color).
 
 is_valid_destination(Board, X, Y) :-
     within_bounds(Board, X, Y),
@@ -318,19 +319,6 @@ adjacent_cell(X, Y, ToX, ToY) :- ToX is X + 1, ToY is Y + 1.
 % Check if a cell is within the board bounds
 valid_cell(Board, (X, Y)) :-
     within_bounds(Board, X, Y).
-    findall((ToX, ToY), (
-        (ToX is X + 1, ToY = Y);
-        (ToX is X - 1, ToY = Y);
-        (ToX = X, ToY is Y + 1);
-        (ToX = X, ToY is Y - 1);
-        (ToX is X + 1, ToY is Y + 1); 
-        (ToX is X - 1, ToY is Y + 1); 
-        (ToX is X + 1, ToY is Y - 1); 
-        (ToX is X - 1, ToY is Y - 1)  
-    ), PossibleCells),
-    findall((ValidX, ValidY), 
-        (member((ValidX, ValidY), PossibleCells), within_bounds(Board, ValidX, ValidY)), 
-        AdjacentCells).
 
 % ===================== STACK OPERATIONS =====================
 
@@ -387,7 +375,7 @@ choose_placement(game(Board, _, _, _, _), 1, X, Y) :-
 
 % Level 2: Strategic Placement
 choose_placement(game(Board, CurrentPlayer, _, _, _), 2, X, Y) :-
-    (CurrentPlayer = pc(_, Color, _) ; CurrentPlayer = human(_, Color)),
+    player_color(Player, Color),    
     findall((Row, Col), (
         between(1, 5, Row),
         between(1, 5, Col),
@@ -520,64 +508,59 @@ game_over(game(Board, _, movement, _, GameConfig), Winner) :-
     valid_moves(game(Board, Player2, movement), Moves2),
     Moves1 = [],
     Moves2 = [],
-    determine_winner(Board, GameConfig, Winner).
+    determine_winner(Board, GameConfig, Winner), !.
 game_over(_, _) :-
     fail. % Continue the game if there are valid moves.
 
-% Determines the winner based on the tallest stack, highest total stacks, and most pieces.
+% Determines the winner based on the tallest stack or highest total stacks.
 determine_winner(Board, game_config(Player1, Player2, _), Winner) :-
-    % Collect all stack heights and their respective colors
-    findall(Height-Color, (
+    extract_stack_heights(Board, blue, BlueStacks),
+    extract_stack_heights(Board, white, WhiteStacks),
+    reverse_sort(BlueStacks, SortedBlueStacks),
+    reverse_sort(WhiteStacks, SortedWhiteStacks),
+    compare_stacks(SortedBlueStacks, SortedWhiteStacks, Winner),
+    write('-----------------------'), nl,
+    write('Game Over!'), nl,
+    get_player_name(WinnerColor, Player1, Player2),
+    write('-----------------------'), nl.
+
+% Gets the winner name based on their color.
+get_player_name(blue, human(Name, _), _) :-
+    write('The winner is: '), write(Name), write('.'), nl.
+get_player_name(blue, pc(_, _, _), _) :-
+    write('The winner is: PCBlue.'), nl.
+get_player_name(white, _, human(Name, _)) :-
+    write('The winner is: '), write(Name), write('.'), nl.
+get_player_name(white, _, pc(_, _, _)) :-
+    write('The winner is: PCWhite.'), nl.
+get_player_name(draw, _, _) :-
+    write('The game ended in a draw.'), nl.
+
+% Reverses the list of stacks heights
+reverse_sort(List, Sorted) :-
+    sort(List, AscSorted),
+    reverse(AscSorted, Sorted).
+
+% Gets the list of stacks heights
+extract_stack_heights(Board, Color, Heights) :-
+    findall(Height, (
         member(Row, Board),
         member(Stack, Row),
-        Stack = [Color|_], % Get the color of the top piece
+        Stack = [Color|_],
         length(Stack, Height)
-    ), Heights),
-    
-    % Sort and reverse to find the tallest stack(s)
-    keysort(Heights, SortedHeights),
-    reverse(SortedHeights, [MaxHeight-Color|Rest]),
+    ), Heights).
 
-    % Collect all players with the tallest stack
-    findall(Player, (
-        member(MaxHeight-PlayerColor, [MaxHeight-Color|Rest]),
-        PlayerColor = blue,
-        Player = Player1
-    ;   PlayerColor = white,
-        Player = Player2
-    ), TallestPlayers),
-
-    % Tie-break based on total stacks of the tallest height
-    (TallestPlayers = [Winner] ->
-        true % Single winner
-    ;   
-        findall(TotalHeight-Player, (
-            member(Player, TallestPlayers),
-            count_tallest_stacks(Board, MaxHeight, Player, TotalHeight)
-        ), TotalStacks),
-        keysort(TotalStacks, SortedStacks),
-        reverse(SortedStacks, [_-Winner|RestTotalStacks]),
-
-        % Further tie-break based on total pieces
-        (RestTotalStacks = [_-_|_] ->
-            findall(TotalPieces-Player, (
-                member(Player, TallestPlayers),
-                (Player = human(_, blue) -> Color = blue ; Color = white),
-                count_pieces(Board, Color, TotalPieces)
-            ), TotalPiecesCount),
-            keysort(TotalPiecesCount, SortedPieces),
-            reverse(SortedPieces, [_-Winner|_]) % Final winner
-        ;
-            true % Winner determined by highest total stacks
-        )
-    ).
-
-% Finds the tallest stack for a player.
-tallest_stack(Board, Player, Height) :-
-    member(Row, Board),
-    member(Stack, Row),
-    Stack = [Player|_], % Get the first element of the stack
-    length(Stack, Height).
+% Compares the list of heights
+compare_stacks([], [], draw). 
+compare_stacks([H1|T1], [H2|T2], Winner) :-
+    H1 > H2,
+    Winner = blue.
+compare_stacks([H1|T1], [H2|T2], Winner) :-
+    H1 < H2,
+    Winner = white.
+compare_stacks([H1|T1], [H2|T2], Winner) :-
+    H1 =:= H2,
+    compare_stacks(T1, T2, Winner).
 
 % ===================== UTILITY PREDICATES =====================
 
@@ -667,17 +650,6 @@ count_pieces(Board, Color, Count) :-
         member(Color, Stack) % Count all occurrences of the color in the stack
     ), Pieces),
     length(Pieces, Count).
-
-% Counts the total stacks of a given height for a specific player.
-count_tallest_stacks(Board, MaxHeight, Player, TotalHeight) :-
-    player_color(Player, Color),
-    findall(1, (
-        member(Row, Board),
-        member(Stack, Row),
-        Stack = [Color|_], % Stack belongs to the player
-        length(Stack, MaxHeight) % Stack is of the tallest height
-    ), Stacks),
-    length(Stacks, TotalHeight).
 
 % Checks if a piece is at a specific position
 piece_at(Board, X, Y, Player) :-
