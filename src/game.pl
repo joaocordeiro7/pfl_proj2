@@ -107,6 +107,12 @@ display_game(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig)) :-
     print_board(InvertedBoard, BoardSize, BoardSize),
     print_column_headers(BoardSize).
 
+% Displays the current player information.
+display_current_player(human(Name, _)) :-
+    write('Current Player: '), write(Name), nl.
+display_current_player(pc(_, _)) :-
+    write('Current Player: PC'), nl.
+
 % Prints the board row by row with row numbers.
 print_board([], _, _).
 print_board([Row|Rest], RowNum, BoardSize) :-
@@ -164,37 +170,17 @@ print_stack_content([white|Rest]) :-
 game_loop(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig), PassCount) :-
     % Extract players from the game config
     GameConfig = game_config(Player1, Player2, _),
-
     % Display the game state
     display_game(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig)),
+    process_phase(Phase, game(Board, CurrentPlayer, Phase, BoardSize, GameConfig), PassCount).
 
-    (Phase = placement ->
-        % Handle placement phase
-        handle_placement(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig), NewGameState),
-        game_loop(NewGameState, 0) % Reset pass count after a successful placement
-    ;
-        % Check valid moves in the movement phase
-        valid_moves(game(Board, CurrentPlayer, movement), Moves),
-        (Moves = [] ->
-            CurrentPlayer = human(Name, _),
-            write(Name), write(' has no valid moves. Passing turn...'), nl,
-            next_player(CurrentPlayer, GameConfig, NextPlayer),
-            NewPassCount is PassCount + 1,
-            (NewPassCount =:= 2 ->
-                % Game ends after two consecutive passes
-                determine_winner(Board, GameConfig, Winner),
-                write('Game over! Winner: '), write(Winner), nl
-            ;
-                % Continue to the next turn
-                game_loop(game(Board, NextPlayer, Phase, BoardSize, GameConfig), NewPassCount)
-            )
-        ;
-            % Handle movement phase
-            handle_movement(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig), NewGameState),
-            game_loop(NewGameState, 0) % Reset pass count after a valid move
-        )
-    ).
-
+% Handles the current game phase
+process_phase(placement, GameState, _) :-
+    handle_placement(GameState, NewGameState),
+    game_loop(NewGameState, 0).
+process_phase(movement, GameState, PassCount) :-
+    handle_movement(GameState, PassCount).
+    
 % ===================== GAME PHASES =====================
 
 handle_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), 
@@ -226,39 +212,49 @@ handle_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig),
     ).
 
 % Handles the movement phase with user instructions.
-handle_movement(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), 
-                game(NewBoard, NextPlayer, movement, BoardSize, GameConfig)) :-
+handle_movement(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), PassCount) :-
+    valid_moves(game(Board, CurrentPlayer, movement), Moves),
+    handle_movement_moves(Moves, game(Board, CurrentPlayer, movement, BoardSize, GameConfig), PassCount).
+
+handle_movement_moves([], game(Board, CurrentPlayer, movement, BoardSize, GameConfig), PassCount) :-
+    CurrentPlayer = human(Name, _),
+    write(Name), write(' has no valid moves. Passing turn...'), nl,
+    next_player(CurrentPlayer, GameConfig, NextPlayer),
+    NewPassCount is PassCount + 1,
+    handle_pass_end(Board, NextPlayer, movement, BoardSize, GameConfig, NewPassCount).
+handle_movement_moves(Moves, GameState, _) :-
+    GameState = game(_, CurrentPlayer, _, _, _),
+    handle_player_move(Moves, CurrentPlayer, GameState).
+
+handle_pass_end(Board, NextPlayer, Phase, BoardSize, GameConfig, 2) :-
+    determine_winner(Board, GameConfig, Winner),
+    write('Game over! Winner: '), write(Winner), nl.
+handle_pass_end(Board, NextPlayer, Phase, BoardSize, GameConfig, PassCount) :-
+    game_loop(game(Board, NextPlayer, Phase, BoardSize, GameConfig), PassCount).
+
+handle_player_move(Moves, pc(Level), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
+    choose_move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Level, Move),
+    write('PC chooses move: '), write(Move), nl,
+    move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Move, NewGameState, GameConfig),
+    game_loop(NewGameState, 0).
+handle_player_move(_, human(_, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
     write('MOVE YOUR STACK'), nl,
     write('Instructions: Choose a move (FromX FromY ToX ToY) to move a stack to an adjacent cell.'), nl,
-    valid_moves(game(Board, CurrentPlayer, movement), Moves),
-    (Moves = [] ->
-        write(CurrentPlayer), write(' has no valid moves. Passing turn...'), nl,
-        next_player(CurrentPlayer, GameConfig, NextPlayer),
-        game_loop(game(Board, NextPlayer, movement, BoardSize, GameConfig), 1) % Pass turn and increment pass count
-    ;
-        (CurrentPlayer = pc(Level) ->
-            choose_move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Level, Move),
-            write('PC chooses move: '), write(Move), nl,
-            move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Move, game(NewBoard, NextPlayer, movement, BoardSize, GameConfig), GameConfig)
-        ;
-            read_move(FromX, FromY, ToX, ToY),
-            (move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), move(FromX, FromY, ToX, ToY), game(NewBoard, NextPlayer, movement, BoardSize, GameConfig), GameConfig) ->
-                true
-            ;
-                write('Invalid move! Ensure it follows the rules. Try again.'), nl,
-                handle_movement(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), 
-                                game(NewBoard, NextPlayer, movement, BoardSize, GameConfig))
-            )
-        ),
-        next_player(CurrentPlayer, GameConfig, NextPlayer)
-    ).
+    read_move(FromX, FromY, ToX, ToY),
+    write('Debug: Checking move ('), write(FromX), write(', '), write(FromY),
+    write(') to ('), write(ToX), write(', '), write(ToY), write(')'), nl,
+    move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), move(FromX, FromY, ToX, ToY), NewGameState, GameConfig),
+    game_loop(NewGameState, 0).
+handle_player_move(_, _, GameState) :-
+    write('Invalid move! Ensure it follows the rules. Try again.'), nl,
+    handle_movement(GameState, 0).
 
 
 % ===================== MOVE VALIDATION =====================
 
 % Validates moves for a given player.
 valid_moves(game(Board, Player, _), Moves) :-
-    (Player = human(_, Color) ; Player = pc(_, Color)),
+    player_color(Player, Color),
     findall(move(FromX, FromY, ToX, ToY), (
         between(1, 5, FromX),
         between(1, 5, FromY),
@@ -273,12 +269,16 @@ valid_moves(game(Board, Player, _), Moves) :-
 
 % Checks if a move is valid.
 valid_move(Board, Player, move(FromX, FromY, ToX, ToY)) :-
-    (Player = human(_, Color) ; Player = pc(_, Color)),
+    player_color(Player, Color),
     within_bounds(Board, FromX, FromY),
     piece_at(Board, FromX, FromY, Color),
     get_adjacent_cells(Board, FromX, FromY, AdjacentCells),
     member((ToX, ToY), AdjacentCells),
     is_valid_destination(Board, ToX, ToY).
+
+% Determine the player's color
+player_color(human(_, Color), Color).
+player_color(pc(_, Color), Color).
 
 is_valid_destination(Board, X, Y) :-
     within_bounds(Board, X, Y),
@@ -289,6 +289,22 @@ is_valid_destination(Board, X, Y) :-
 
 % Get all valid adjacent cells as a list, including diagonal moves
 get_adjacent_cells(Board, X, Y, AdjacentCells) :-
+    findall((ToX, ToY), adjacent_cell(X, Y, ToX, ToY), PossibleCells),
+    include(valid_cell(Board), PossibleCells, AdjacentCells).
+
+% Define adjacent cells in all possible directions
+adjacent_cell(X, Y, ToX, ToY) :- ToX is X + 1, ToY is Y.
+adjacent_cell(X, Y, ToX, ToY) :- ToX is X - 1, ToY is Y.
+adjacent_cell(X, Y, ToX, ToY) :- ToX is X, ToY is Y + 1.
+adjacent_cell(X, Y, ToX, ToY) :- ToX is X, ToY is Y - 1.
+adjacent_cell(X, Y, ToX, ToY) :- ToX is X - 1, ToY is Y - 1.
+adjacent_cell(X, Y, ToX, ToY) :- ToX is X - 1, ToY is Y + 1.
+adjacent_cell(X, Y, ToX, ToY) :- ToX is X + 1, ToY is Y - 1.
+adjacent_cell(X, Y, ToX, ToY) :- ToX is X + 1, ToY is Y + 1.
+
+% Check if a cell is within the board bounds
+valid_cell(Board, (X, Y)) :-
+    within_bounds(Board, X, Y).
     findall((ToX, ToY), (
         (ToX is X + 1, ToY = Y);
         (ToX is X - 1, ToY = Y);
@@ -574,7 +590,7 @@ count_pieces(Board, Color, Count) :-
 
 % Counts the total stacks of a given height for a specific player.
 count_tallest_stacks(Board, MaxHeight, Player, TotalHeight) :-
-    (Player = human(_, Color) ; Player = pc(_, Color)),
+    player_color(Player, Color),
     findall(1, (
         member(Row, Board),
         member(Stack, Row),
