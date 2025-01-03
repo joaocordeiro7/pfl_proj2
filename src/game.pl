@@ -216,38 +216,51 @@ handle_movement(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Pas
     valid_moves(game(Board, CurrentPlayer, movement), Moves),
     handle_movement_moves(Moves, game(Board, CurrentPlayer, movement, BoardSize, GameConfig), PassCount).
 
+% Handles cases where no valid moves are available.
 handle_movement_moves([], game(Board, CurrentPlayer, movement, BoardSize, GameConfig), PassCount) :-
-    CurrentPlayer = human(Name, _),
-    write(Name), write(' has no valid moves. Passing turn...'), nl,
+    write(CurrentPlayer), write(' has no valid moves. Passing turn...'), nl,
     next_player(CurrentPlayer, GameConfig, NextPlayer),
     NewPassCount is PassCount + 1,
     handle_pass_end(Board, NextPlayer, movement, BoardSize, GameConfig, NewPassCount).
+
+% Handles cases where valid moves exist.
 handle_movement_moves(Moves, GameState, _) :-
     GameState = game(_, CurrentPlayer, _, _, _),
     handle_player_move(Moves, CurrentPlayer, GameState).
 
+% Ends the turn when passes reach 2 or transitions to the next player.
 handle_pass_end(Board, NextPlayer, Phase, BoardSize, GameConfig, 2) :-
     determine_winner(Board, GameConfig, Winner),
     write('Game over! Winner: '), write(Winner), nl.
 handle_pass_end(Board, NextPlayer, Phase, BoardSize, GameConfig, PassCount) :-
     game_loop(game(Board, NextPlayer, Phase, BoardSize, GameConfig), PassCount).
 
-handle_player_move(Moves, pc(Level), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
+% Executes the move for a PC player based on their level.
+handle_player_move(Moves, pc(Level, Color, Name), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
+    write(Name), write(' is thinking...'), nl,
     choose_move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Level, Move),
-    write('PC chooses move: '), write(Move), nl,
-    move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Move, NewGameState, GameConfig),
-    game_loop(NewGameState, 0).
-handle_player_move(_, human(_, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
+    write(Name), write(' chooses move: '), write(Move), nl,
+    (move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), Move, NewGameState, GameConfig) ->
+        game_loop(NewGameState, 0)
+    ;
+        write('Error: PC move failed. Retrying...'), nl,
+        handle_player_move(Moves, pc(Level, Color, Name), game(Board, CurrentPlayer, movement, BoardSize, GameConfig))
+    ).
+
+% Prompts and processes move for a Human player.
+handle_player_move(_, human(Name, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
+    write(Name), write(', it\'s your turn!'), nl,
     write('MOVE YOUR STACK'), nl,
-    write('Instructions: Choose a move (FromX FromY ToX ToY) to move a stack to an adjacent cell.'), nl,
+    write('Instructions: Choose a move (FromX FromY ToX ToY).'), nl,
     read_move(FromX, FromY, ToX, ToY),
-    write('Debug: Checking move ('), write(FromX), write(', '), write(FromY),
-    write(') to ('), write(ToX), write(', '), write(ToY), write(')'), nl,
     move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), move(FromX, FromY, ToX, ToY), NewGameState, GameConfig),
     game_loop(NewGameState, 0).
+
+% Handles invalid moves by retrying the turn.
 handle_player_move(_, _, GameState) :-
     write('Invalid move! Ensure it follows the rules. Try again.'), nl,
     handle_movement(GameState, 0).
+
 
 
 % ===================== MOVE VALIDATION =====================
@@ -387,7 +400,6 @@ choose_placement(game(Board, CurrentPlayer, _, _, _), 2, X, Y) :-
     keysort(ValuedPlacements, SortedPlacements),
     last(SortedPlacements, _-(X, Y)).
 
-% Simulates the value of a placement
 simulate_placement(Board, X, Y, Color, Value) :-
     add_player_piece(Board, X, Y, pc(_, Color, _), NewBoard),
     findall(Height, (
@@ -396,17 +408,85 @@ simulate_placement(Board, X, Y, Color, Value) :-
         Stack = [Color|_],
         length(Stack, Height)
     ), Heights),
-    max_list(Heights, Value).
+    max_list(Heights, MaxHeight),
+    board_center(Board, CenterX, CenterY),
+    centrality_bonus(X, Y, CenterX, CenterY, Bonus),
+    crowding_penalty(NewBoard, X, Y, Color, Penalty),
+    Value is MaxHeight + Bonus - Penalty.
 
-% Chooses a move for the computer player based on the difficulty level
-choose_move(GameState, 1, Move) :-
-    valid_moves(GameState, Moves),
-    random_member(Move, Moves).
-choose_move(GameState, 2, Move) :-
-    valid_moves(GameState, Moves),
-    findall(Value-M, (member(M, Moves), move(GameState, M, NewGameState, GameConfig), value(NewGameState, Player, Value)), ValuedMoves),
-    keysort(ValuedMoves, SortedMoves),
-    last(SortedMoves, _-Move).
+% Calculates the crowding penalty
+crowding_penalty(Board, X, Y, Color, Penalty) :-
+    findall(NeighborColor, (
+        neighbor_positions(X, Y, NX, NY),
+        within_bounds(Board, NX, NY),
+        nth1(NY, Board, Row),
+        nth1(NX, Row, Stack),
+        Stack = [NeighborColor|_]
+    ), Neighbors),
+    count_occurrences(Color, Neighbors, Count),
+    Penalty is Count * 2. % Penalty proportional to nearby same-color stacks
+
+% Calculates neighbor positions
+neighbor_positions(X, Y, NX, NY) :-
+    (NX is X + 1, NY = Y);
+    (NX is X - 1, NY = Y);
+    (NX = X, NY is Y + 1);
+    (NX = X, NY is Y - 1).
+
+% Calculates the centrality bonus
+centrality_bonus(X, Y, CenterX, CenterY, Bonus) :-
+    Distance is abs(X - CenterX) + abs(Y - CenterY),
+    Bonus is 10 - Distance. % Higher bonus for closer to the center
+
+% Finds the center of the board
+board_center(Board, CenterX, CenterY) :-
+    length(Board, Size),
+    CenterX is (Size + 1) // 2,
+    CenterY is (Size + 1) // 2.
+
+% Level 1: Random valid move
+choose_move(game(Board, CurrentPlayer, movement, _, _), 1, Move) :-
+    write('Debug: Choosing random move'), nl,
+    valid_moves(game(Board, CurrentPlayer, movement), Moves),
+    (random_member(Move, Moves) ->
+        true
+    ;
+        write('Debug: No valid moves for PC.'), nl, fail
+    ).
+
+% Level 2: Strategic move
+choose_move(game(Board, CurrentPlayer, movement, _, _), 2, Move) :-
+    write('Debug: Choosing strategic move'), nl,
+    (CurrentPlayer = pc(_, Color, _)),
+    valid_moves(game(Board, CurrentPlayer, movement), Moves),
+    findall(Value-M, (
+        member(M, Moves),
+        simulate_move(Board, M, Color, Value)
+    ), ValuedMoves),
+    (keysort(ValuedMoves, SortedMoves), last(SortedMoves, _-Move) ->
+        true
+    ;
+        write('Debug: No valid moves or scoring issue.'), nl, fail
+    ).
+
+% Simulates the value of a move
+simulate_move(Board, move(FromX, FromY, ToX, ToY), Color, Value) :-
+    execute_move(Board, FromX, FromY, ToX, ToY, NewBoard),
+    value(NewBoard, Color, Value).
+
+% Evaluates the board for a given color.
+value(Board, Color, Value) :-
+    findall(StackHeight, (
+        member(Row, Board),
+        member(Stack, Row),
+        Stack = [Color|_],
+        length(Stack, StackHeight)
+    ), Heights),
+    max_list(Heights, MaxHeight),
+    findall(Move, valid_moves(game(Board, pc(_, Color, _), movement), Move), MobilityMoves),
+    length(MobilityMoves, MobilityScore),
+    Value is MaxHeight * 10 + MobilityScore. % Stack height is prioritized
+
 
 % ===================== PLAYER MANAGEMENT =====================
 
