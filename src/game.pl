@@ -15,27 +15,16 @@ play :-
     write('2. During the MOVEMENT phase, type "FromX FromY ToX ToY" to move a stack.'), nl,
     write('   Example: "1 1 2 2" moves the stack from (1, 1) to (2, 2).'), nl,
     write('3. Follow the prompts and enjoy the game!'), nl, nl,
-    write('Choose board size (N for NxN grid): '), nl,
-    get_clean_char(BoardSizeChar),
-    char_to_number(BoardSizeChar, BoardSize),
-    validate_board_size(BoardSize),
+    get_number(3, 9, 'Choose board size (N for NxN grid)', BoardSize), nl,
         write('1. Human vs Human'), nl,
         write('2. Human vs PC'), nl,
         write('3. PC vs Human'), nl,
         write('4. PC vs PC'), nl,
-        write('Choose an option (1-4): '), nl,
-        get_clean_char(GameModeChar),
-        handle_option(GameModeChar, BoardSize).
-
-% Validates the input for board size
-validate_board_size(BoardSize) :-
-    BoardSize >= 3, !.
-validate_board_size(_) :-
-    write('Invalid size. The board must be at least 3x3.'), nl, nl, nl,
-    play. 
+        get_number(1, 4, 'Choose an option', GameMode), nl,
+        handle_option(GameMode, BoardSize).
 
 % Handles Human vs Human
-handle_option('1', BoardSize) :-
+handle_option(1, BoardSize) :-
     write('Enter name for Player 1 (Blue): '), 
     read_line(user_input, Player1NameCodes), atom_codes(Player1Name, Player1NameCodes),
     write('Enter name for Player 2 (White): '), 
@@ -45,21 +34,17 @@ handle_option('1', BoardSize) :-
     game_loop(GameState, 0).
 
 % Handles Human vs PC
-handle_option('2', BoardSize) :-
+handle_option(2, BoardSize) :-
     write('Enter name for Player 1 (Blue): '), 
     read_line(user_input, Player1NameCodes), atom_codes(Player1Name, Player1NameCodes),
-    write('Choose difficulty level for PC (1-2): '), nl,
-    get_clean_char(LevelChar),
-    char_to_number(LevelChar, Level),
+    get_number(1, 2, 'Choose difficulty level for PC', Level),
     GameConfig = game_config(human(Player1Name, blue), pc(Level, white, 'PCWhite'), BoardSize),
     initial_state(GameConfig, GameState),
     game_loop(GameState, 0).
 
 % Handles PC vs Human
-handle_option('3', BoardSize) :-
-    write('Choose difficulty level for PC (1-2): '), nl,
-    get_clean_char(LevelChar),
-    char_to_number(LevelChar, Level),
+handle_option(3, BoardSize) :-
+    get_number(1, 2, 'Choose difficulty level for PC', Level), nl,
     write('Enter name for Player 2 (White): '), 
     read_line(user_input, Player2NameCodes), atom_codes(Player2Name, Player2NameCodes),
     GameConfig = game_config(pc(Level, blue, 'PCBlue'), human(Player2Name, white), BoardSize),
@@ -67,13 +52,9 @@ handle_option('3', BoardSize) :-
     game_loop(GameState, 0).
 
 % Handles PC vs PC
-handle_option('4', BoardSize) :-
-    write('Choose difficulty level for PC Blue (1-2): '), nl,
-    get_clean_char(Level1Char),
-    char_to_number(Level1Char, Level1),
-    write('Choose difficulty level for PC White (1-2): '), nl,
-    get_clean_char(Level2Char),
-    char_to_number(Level2Char, Level2),
+handle_option(4, BoardSize) :-
+    get_number(1, 2, 'Choose difficulty level for PC Blue', Level1), nl,
+    get_number(1, 2, 'Choose difficulty level for PC White', Level2), nl,
     GameConfig = game_config(pc(Level1, blue, 'PCBlue'), pc(Level2, white, 'PCWhite'), BoardSize),
     initial_state(GameConfig, GameState),
     game_loop(GameState, 0).
@@ -197,7 +178,7 @@ handle_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig),
     CurrentPlayer = human(_, _),
     write('PLACE YOUR PIECE'), nl,
     write('Instructions: Choose a position (X Y) to place your piece on top of a neutral stack.'), nl,
-    read_placement(X, Y),
+    read_placement(X, Y, BoardSize),
     process_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), X, Y, NewBoard, NextPlayer, NewPhase).
 
 process_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), X, Y, NewBoard, NextPlayer, movement) :-
@@ -254,7 +235,7 @@ handle_player_move(Moves, pc(Level, Color, _), game(Board, CurrentPlayer, moveme
 handle_player_move(_, human(_, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
     write('MOVE YOUR STACK'), nl,
     write('Instructions: Choose a move (FromX FromY ToX ToY).'), nl,
-    read_move(FromX, FromY, ToX, ToY),
+    read_move(FromX, FromY, ToX, ToY, BoardSize),
     move(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), move(FromX, FromY, ToX, ToY), NewGameState, GameConfig),
     game_loop(NewGameState, 0).
 
@@ -420,10 +401,13 @@ count_occurrences(Element, [_|Rest], Count) :-
 
 % Calculates neighbor positions
 neighbor_positions(X, Y, NX, NY) :-
-    (NX is X + 1, NY = Y);
-    (NX is X - 1, NY = Y);
-    (NX = X, NY is Y + 1);
-    (NX = X, NY is Y - 1).
+    (NX is X + 1, NY is Y).
+neighbor_positions(X, Y, NX, NY) :-
+    (NX is X - 1, NY is Y).
+neighbor_positions(X, Y, NX, NY) :-
+    (NX is X, NY is Y + 1).
+neighbor_positions(X, Y, NX, NY) :-
+    (NX is X, NY is Y - 1).
 
 % Calculates the centrality bonus
 centrality_bonus(X, Y, CenterX, CenterY, Bonus) :-
@@ -561,37 +545,33 @@ within_bounds(Board, X, Y) :-
     X > 0, X =< Size,
     Y > 0, Y =< Size.
 
-get_clean_char(Char) :-
-    get_char(Char),
-    skip_line.
+read_number(X):-
+    read_number_aux(X, 0).
+read_number_aux(X, Acc) :- 
+    get_code(C),
+    between(48, 57, C), !,
+    Acc1 is 10 * Acc + (C - 48),
+    read_number_aux(X, Acc1).
+read_number_aux(X, X).
 
-char_to_number(Char, Number) :-
-    atom_codes(Char, [Code]),
-    Number is Code - 48.
+get_number(Min, Max, Context, Value):-
+    format('~a (~d - ~d): ', [Context, Min, Max]),
+    repeat,                          
+    read_number(Value),
+    between(Min, Max, Value), 
+    !.  
 
 % Read coordinates for placement
-read_placement(X, Y) :-
-    write('Enter X coordinate: '), 
-    get_clean_char(XChar),
-    char_to_number(XChar, X),
-    write('Enter Y coordinate: '), 
-    get_clean_char(YChar),
-    char_to_number(YChar, Y).
+read_placement(X, Y, BoardSize) :-
+    get_number(1, BoardSize, 'Enter X coordinate', X),
+    get_number(1, BoardSize, 'Enter Y coordinate', Y).
 
 % Read coordinates for movement
-read_move(FromX, FromY, ToX, ToY) :-
-    write('From X: '), 
-    get_clean_char(FXChar),
-    char_to_number(FXChar, FromX),
-    write('From Y: '), 
-    get_clean_char(FYChar),
-    char_to_number(FYChar, FromY),
-    write('To X: '), 
-    get_clean_char(TXChar),
-    char_to_number(TXChar, ToX),
-    write('To Y: '), 
-    get_clean_char(TYChar),
-    char_to_number(TYChar, ToY).
+read_move(FromX, FromY, ToX, ToY, BoardSize) :-
+    get_number(1, BoardSize, 'From X', FromX),
+    get_number(1, BoardSize, 'From Y', FromY),
+    get_number(1, BoardSize, 'To X', ToX),
+    get_number(1, BoardSize, 'To Y', ToY).
 
 % Adds a player's piece to the board at the specified position.
 add_player_piece(Board, X, Y, human(_, Color), NewBoard) :-
