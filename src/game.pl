@@ -809,3 +809,58 @@ max_list([H|T], CurrentMax, Max) :-
 max_list([H|T], CurrentMax, Max) :-
     H =< CurrentMax,
     max_list(T, CurrentMax, Max).
+
+
+
+% ===================== PREDICATES FOR DEMONSTRATION =====================
+
+% Intermediate state: After a few pieces have been placed.
+% intermediate_state_placement(GameState), game_loop(GameState, 0).
+intermediate_state_placement(game([
+    [[neutral], [neutral], [neutral], [neutral], [neutral]],
+    [[neutral], [blue, neutral], [neutral], [neutral], [neutral]],
+    [[neutral], [neutral], [neutral], [neutral], [neutral]],
+    [[neutral], [neutral], [neutral], [white, neutral], [neutral]],
+    [[neutral], [neutral], [neutral], [neutral], [neutral]]
+], human('Player1', blue), placement, 5, game_config(human('Player1', blue), human('Player2', white), 5))).
+
+
+% Intermediate state: During the movement phase with some stacks formed.
+% intermediate_state_movement(GameState), game_loop(GameState, 0).
+intermediate_state_movement(game([
+    [[white, neutral], [], [neutral], [neutral], [blue, neutral]],
+    [[neutral], [blue, neutral, neutral], [neutral], [neutral], [neutral]],
+    [[neutral], [white, neutral], [neutral], [neutral], [neutral]],
+    [[blue, neutral, neutral], [neutral], [], [white, neutral], []],
+    [[], [neutral], [blue, neutral, neutral], [], [white, neutral, neutral, neutral]]
+], human('Player2', white), movement, 5, game_config(human('Player1', blue), human('Player2', white), 5))).
+
+
+% Near-final state: Move (1, 4, 1 , 3) - draw.
+% near_final_state_draw(GameState), game_loop(GameState, 0).
+near_final_state_draw(game([
+    [[blue, neutral, neutral, neutral], [], [], [blue, neutral, neutral, neutral]],
+    [[], [], [white, neutral, neutral, neutral], []],
+    [[neutral], [], [], []],
+    [[white, neutral, neutral], [blue, neutral, neutral], [], [white, neutral, neutral]]
+], human('Player2', white), movement, 4, game_config(human('Player1', blue), human('Player2', white), 4))).
+
+
+% Near-final state: Move (1, 1, 1, 2) - Player1 win.
+% near_final_state_blue(GameState), game_loop(GameState, 0).
+near_final_state_blue(game([
+    [[blue, neutral, neutral, neutral], [], [], [blue, neutral, neutral, neutral]],
+    [[neutral], [], [white, neutral, neutral, neutral], []],
+    [[], [], [], []],
+    [[white, neutral, neutral], [blue, neutral, neutral], [], [white, neutral, neutral]]
+], human('Player2', white), movement, 4, game_config(human('Player1', blue), human('Player2', white), 4))).
+
+
+% Near-final state: Move (4, 4, 3, 4) - Player2 win.
+% near_final_state_white(GameState), game_loop(GameState, 0).
+near_final_state_white(game([
+    [[blue, neutral, neutral, neutral], [], [], [blue, neutral, neutral, neutral]],
+    [[], [], [white, neutral, neutral, neutral], []],
+    [[], [], [], []],
+    [[white, neutral, neutral, neutral], [blue, neutral], [neutral], [white, neutral]]
+], human('Player2', white), movement, 4, game_config(human('Player1', blue), human('Player2', white), 4))).

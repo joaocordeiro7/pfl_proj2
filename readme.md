@@ -35,8 +35,7 @@ O jogo inicia-se com o predicado play/0:
 
 
 ## Considerações para Extensões do Jogo
-? Permitir tabuleiros maiores (ex.: 6x6 - 10 peças, 7x7 - 12 peças ...)
-? ...
+Neste jogo é permitido escolher tabuleiros de diferentes tamanhos, sendo que o número de peças de cada jogador depende desse tamanho (o número de peças por jogador é igual ao tamanho do tabuleiro menos 1)
 
 
 ## Lógica do Jogo
