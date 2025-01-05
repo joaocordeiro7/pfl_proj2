@@ -52,8 +52,8 @@ Já para casos em que um ou dois jogadores humanos, cada um destes pode inserir 
 
 
 ## Lógica do Jogo
-**Representação da Configuração do Jogo**
 
+**Representação da Configuração do Jogo**
 A configuração do jogo encapsula os detalhes essenciais, como o tipo de jogadores (humano ou computador), tamanho do tabuleiro, nomes dos jogadores e níveis de dificuldade dos bots. Isto é representado como um termo Prolog game_config/3:
 
 ``game_config(Player1, Player2, BoardSize)``
@@ -62,6 +62,7 @@ A configuração do jogo encapsula os detalhes essenciais, como o tipo de jogado
 * BoardSize especifica as dimensões do tabuleiro NxN.
 
 Esta configuração é utilizada no predicado initial_state/2 para inicializar o estado inicial do jogo.
+
 
 **Representação Interna do Estado do Jogo**
 
@@ -74,6 +75,7 @@ O estado do jogo captura toda a informação sobre o jogo num dado momento. É r
 * Phase: Indica se o jogo está na fase de "posicionamento" ou "movimento";
 * BoardSize: Dimensão do tabuleiro (ex.: 5 para um tabuleiro 5x5);
 * GameConfig: Contém os detalhes dos dois jogadores e o tamanho do tabuleiro.
+
 
 **Representação das jogadas**
 
@@ -94,8 +96,16 @@ Durante o jogo, os inputs mudam conforme a fase. Na fase de colocação, os joga
 
 ## Conclusões
 
+O jogo foi implementado com sucesso, sendo que foram desenvolvidos 4 modos de jogos (Humano/Humano, Humano/PC, PC/Humano e PC/PC) e para cada jogador PC dois níveis de IA diferentes foram elaborados, um com jogadas aleatórias e outro com jogadas ponderadas visando a vitória. Todo o código foi implementado visando ao máximo uma abordagem declarativa em Prolog e foi todo comentado com a declaração do predicado e de pequenas notas sobre o funcionamento de cada um.
+
 
 ## Bibliografia
 
 * Descrição do Jogo - https://boardgamegeek.com/boardgame/425529/staqs
-* 
+
+* Exemplos de queries realizadas ao ChatGPT:
+  - Enviou-se ocódigo e uma imagem da consulta do ficheiro no SICStus. -> Explica os problemas que são mostrados na imagem tendo em conta o código disponibilizado.
+  - Como uso o sleep entre as jogadas do computador para demorar um pouco antes da próxima jogada?
+  - Enviou-se as guidelines para o código presentes no guião -> Look at these requirements and tell me if my current src code is following all the requirements or not and what I can still improve, I've noticed for example the use of coordinates starting the (1,1) at lower left corner, which I'm not doing, help me with that.
+  - Ajuda-me a construir alguns game states intermédios e perto do final de jogo para poder demonstrar mais rapidamente algumas regras do meu jogo (these game states can be hard-coded directly into the code file, using predicates similar to the initial_state/2 predicate).
+  - Something in execute_move predicate is not working as expected crashing my sicstus, can you help me finding the problem?
