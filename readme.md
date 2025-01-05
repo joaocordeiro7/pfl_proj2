@@ -20,10 +20,10 @@ O jogo inicia-se com o predicado play/0:
 
 
 ## Descrição do Jogo
-**STAQS** é um jogo de tabuleiro estratégico para dois jogadores. É jogado num tabuleiro 5 por 5 em que cada jogador tem 4 peças empilháveis. O jogo começa com 25 peças neutras, uma por cada casa do tabuleiro. A princípio, à vez, cada jogador deve posicionar uma das suas peças em cima de uma das peças neutras até as 8 peças estarem colocadas. A partir daí, na sua vez, o jogador deve mover uma das suas pilhas (incluindo as peças neutras) uma casa, para cima de outra peça neutra. 
+**STAQS** é um jogo de tabuleiro estratégico para dois jogadores. É jogado num tabuleiro 5 por 5 em que cada jogador tem 4 peças empilháveis. O jogo começa com 25 peças neutras, uma por cada casa do tabuleiro. Numa fase inicial (fase de posicionamento), cada jogador deve posicionar, à vez, cada uma das suas peças em cima de uma das peças neutras até as 8 peças estarem colocadas. Já na fase de movimento, à vez, cada jogador deve mover uma das suas pilhas (com a cor correspondente no topo) uma casa, para cima de outra peça neutra. 
 
 **Principais regras:**
-* Uma pilha só se pode mover para uma das 8 casas que fazem extrita fronteira com a casa onde está inicialmente, ou seja, pode mover-se na vertical, horizontal ou diagonal;
+* Uma pilha só se pode mover para uma das casas que a contornam no momento, ou seja, pode mover-se na vertical, horizontal ou diagonal;
 * Uma pilha não pode saltar para cima de outra pilha ou mover-se para espaços vazios, ou seja, só se pode mover para uma casa com exatamente uma peça neutra;
 * Se um jogador não puder mover nenhuma das suas pilhas, deve passar;
 * Se ambos os jogadores passarem consecutivamente, o jogo termina.
@@ -35,18 +35,20 @@ O jogo inicia-se com o predicado play/0:
 
 
 ## Considerações para Extensões do Jogo
-> Neste jogo é permitido escolher tabuleiros de diferentes tamanhos, sendo que o número de peças de cada jogador depende desse tamanho (o número de peças por jogador é igual ao tamanho do tabuleiro menos 1).    
+Neste jogo é permitido escolher tabuleiros de diferentes tamanhos, sendo que o número de peças de cada jogador depende desse tamanho (o número de peças por jogador é igual ao tamanho do tabuleiro menos 1).    
 
-> Além disso, o utilizador pode também escolher entre 4 modos de jogo diferentes:
+Além disso, o utilizador pode também escolher entre 4 modos de jogo diferentes:
 * **Humano vs. Humano -** O jogo espera a interação de dois jogadores;
 * **Humano vs. PC -** O jogo espera interação para o primeiro jogador enquanto o segundo jogador é um bot;
 * **PC vs. Humano -** Semelhante à opção anterior mas a ordem de jogadores é trocada;
-* **PC vs. PC -** O jogo é jogado por dois bots.    
-> Para casos em que o PC é escolhido para jogar, o utilizador pode também escolher o seu nível de dificuldade entre duas opções: 
+* **PC vs. PC -** O jogo é jogado por dois bots.
+ 
+Para casos em que o PC é escolhido para jogar, o utilizador pode também escolher o seu nível de dificuldade entre duas opções: 
 
 * **1 -** O bot faz jogadas aleatórias tendo em conta todas as opções disponíveis e válidas;   
-* **2 -** O bot utiliza um algoritmo greedy para determinar qual a melhor jogada tendo em conta as opções disponíveis e válidas.    
-> Já para casos em que um ou dois jogadores humanos, cada um destes pode inserir um nome para ser apresentado nas suas jogadas.
+* **2 -** O bot utiliza um algoritmo greedy para determinar qual a melhor jogada tendo em conta as opções disponíveis e válidas.
+
+Já para casos em que um ou dois jogadores humanos, cada um destes pode inserir um nome para ser apresentado nas suas jogadas.
 
 
 ## Lógica do Jogo
