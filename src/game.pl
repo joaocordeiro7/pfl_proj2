@@ -12,11 +12,13 @@
 % Entry point for the game. Displays the instructions and the menu that allows choosing the board size 
 % and the game type (H/H, H/PC, PC/H, or PC/PC). 
 play :-
+    nl,
     write('Welcome to STAQS!'), nl, nl,
     write('Instructions:'), nl,
     write('1. During the PLACEMENT phase, type "X Y" to place your piece on top of a neutral stack.'), nl,
     write('   Example: "1 1" places your piece at the lower-left corner of the board.'), nl,
-    write('2. During the MOVEMENT phase, type "FromX FromY ToX ToY" to move a stack to an adjacent cell (vertical, horizontal, diagonal).'), nl,
+    write('2. During the MOVEMENT phase, type "FromX FromY ToX ToY" to move a stack to an adjacent'), nl, 
+    write('   cell (vertical, horizontal, diagonal).'), nl,
     write('   Example: "1 1 2 2" moves the stack from (1, 1) to (2, 2).'), nl,
     write('3. Stacks can only move onto cells containing exactly one neutral piece.'), nl,
     write('4. The game ends if there is no valid moves for both players.'), nl,
@@ -855,10 +857,10 @@ intermediate_state_movement(game([
     [[neutral], [white, neutral], [neutral], [neutral], [neutral]],
     [[blue, neutral, neutral], [neutral], [], [white, neutral], []],
     [[], [neutral], [blue, neutral, neutral], [], [white, neutral, neutral, neutral]]
-], human('Player2', white), movement, 5, game_config(human('Player1', blue), human('Player2', white), 5))).
+], human('Player2', white), movement, 5, game_config(pc(1, blue, 'PCBlue'), human('Player2', white), 5))).
 
 
-% Near-final state: Move (1, 4, 1 , 3) - draw.
+% Near-final state: Move (1, 4, 1, 3) - draw.
 % near_final_state_draw(GameState), game_loop(GameState, 0).
 near_final_state_draw(game([
     [[blue, neutral, neutral, neutral], [], [], [blue, neutral, neutral, neutral]],
