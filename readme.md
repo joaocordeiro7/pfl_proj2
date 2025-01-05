@@ -1,6 +1,3 @@
-input handling
-
-
 # PFL - 2º Trabalho Prático
 # Implementação de um Jogo de Tabuleiro em Prolog
 
