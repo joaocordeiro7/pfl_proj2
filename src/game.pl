@@ -75,7 +75,11 @@ handle_option(4, BoardSize) :-
 % ===================== GAME INITIALIZATION =====================
 
 % initial_state(+GameConfig, -GameState)
-% Sets up the initial game state based on the game configuration
+% Sets up the initial game state based on the game configuration. 
+% The game configuration contains information about the size of the board and the two players 
+% (in the case of a human player it stores their name and color and for a PC it also stores their level).
+% The game state stores the board (a matrix of lists in which each position is a list of the pieces in that position), 
+% the player playing, the current game phase (placement or movement), the size of the board and the configuration of the game.
 initial_state(game_config(Player1, Player2, BoardSize), game(Board, Player1, placement, BoardSize, game_config(Player1, Player2, BoardSize))) :-
     create_board(BoardSize, Board).
 
@@ -99,12 +103,15 @@ create_row(Size, Row) :-
 
 % display_game(+GameState)
 % Displays the game board with labeled rows and columns.
+% It receives the current state of the game and prints the player playing, the current game phase and the entire board 
+% using several predicates to print its various components such as the header, pieces and separators 
+% (the board reverses the rows so that position (1,1) is in the lower-left corner).
 display_game(game(Board, CurrentPlayer, Phase, BoardSize, _)) :-
     nl,
     write('Current Player: '),
     display_current_player(CurrentPlayer), nl,
     write('Phase: '), write(Phase), nl, nl,
-    reverse(Board, InvertedBoard), % Reverse rows for lower-left corner
+    reverse(Board, InvertedBoard),
     print_separator(BoardSize),
     print_board(InvertedBoard, BoardSize, BoardSize),
     print_column_headers(BoardSize).
@@ -260,7 +267,7 @@ process_placement(game(Board, CurrentPlayer, placement, _, _), _, _, Board, Curr
 % handle_movement(+GameState, +PassCount)
 % Handles the movement phase with user instructions, checking valid moves or handling pass scenarios.
 handle_movement(game(Board, CurrentPlayer, movement, BoardSize, GameConfig), PassCount) :-
-    valid_moves(game(Board, CurrentPlayer, movement), Moves),
+    valid_moves(game(Board, CurrentPlayer, movement, BoardSize, _), Moves),
     handle_movement_moves(Moves, game(Board, CurrentPlayer, movement, BoardSize, GameConfig), PassCount).
 
 
@@ -318,12 +325,14 @@ handle_player_move(_, GameState) :-
 % ===================== MOVE VALIDATION =====================
 
 % valid_moves(+GameState, -ListOfMoves)
-% Generates a list of all valid moves for the current player in the given game state.
-valid_moves(game(Board, Player, _), Moves) :-
+% Receives the current game state, checks the current player and generates a list with all valid moves for him, taking into account 
+% the board coordinates, the positions of the player's pieces, the positions adjacent to them and whether these are valid considering 
+% the pieces that are already in this new position.
+valid_moves(game(Board, Player, _, BoardSize, _), Moves) :-
     player_color(Player, Color),
     findall(move(FromX, FromY, ToX, ToY), (
-        between(1, 5, FromX),
-        between(1, 5, FromY),
+        between(1, BoardSize, FromX),
+        between(1, BoardSize, FromY),
         piece_at(Board, FromX, FromY, Color),
         get_adjacent_cells(Board, FromX, FromY, AdjacentCells),
         member((ToX, ToY), AdjacentCells),
@@ -387,7 +396,10 @@ valid_cell(Board, (X, Y)) :-
 % ===================== STACK OPERATIONS =====================
 
 % move(+GameState, +Move, -NewGameState)
-% Validates and executes a move, returning the updated game state.
+% Receives the current state of the game and the move to be made, validates the move (i.e., if the original position has a piece 
+% that belongs to the player, if it is within the limits of the board, if it is to an adjacent position and if that position 
+% contains only one neutral piece), if it is valid executes it, leaving the initial position empty and adding all the elements 
+% of the old position to the new one. At the end it switches to the next player, returning the updated game sate.
 move(game(Board, Player, Phase, BoardSize, GameConfig), move(FromX, FromY, ToX, ToY), game(NewBoard, NextPlayer, Phase, BoardSize, GameConfig)) :-
     valid_move(Board, Player, move(FromX, FromY, ToX, ToY)),
     execute_move(Board, FromX, FromY, ToX, ToY, NewBoard),
@@ -437,20 +449,20 @@ execute_move(Board, FromX, FromY, ToX, ToY, NewBoard) :-
 % choose_placement(+GameState, +Level, -X, -Y)
 % Chooses a placement position for the PC player based on the difficulty level.
 % Level 1: Random Placement
-choose_placement(game(Board, _, _, _, _), 1, X, Y) :-
+choose_placement(game(Board, _, _, BoardSize, _), 1, X, Y) :-
     findall((Row, Col), (
-        between(1, 5, Row),
-        between(1, 5, Col),
+        between(1, BoardSize, Row),
+        between(1, BoardSize, Col),
         valid_placement(Board, Row, Col)
     ), ValidPlacements),
     random_member((X, Y), ValidPlacements).
 
 % Level 2: Strategic Placement
-choose_placement(game(Board, CurrentPlayer, _, _, _), 2, X, Y) :-
+choose_placement(game(Board, CurrentPlayer, _, BoardSize, _), 2, X, Y) :-
     player_color(CurrentPlayer, Color),    
     findall((Row, Col), (
-        between(1, 5, Row),
-        between(1, 5, Col),
+        between(1, BoardSize, Row),
+        between(1, BoardSize, Col),
         valid_placement(Board, Row, Col)
     ), ValidPlacements),
     findall(Value-(Row, Col), (
@@ -518,34 +530,41 @@ board_center(Board, CenterX, CenterY) :-
 
 
 % choose_move(+GameState, +Level, -Move)
-% Chooses a move for the PC player based on the difficulty level.
+% It receives the current game status and the PC level as the strategy for choosing the movement will depend on this. 
+% Both levels calculate all available valid moves. For the first level, one of these is chosen randomly.
+% The second level simulates the game state after each movement and calculates its value, associating this value with º
+% the movement as a pair in a list that is then sorted and from which the movement with the highest value is chosen.
 % Level 1: Random valid move
-choose_move(game(Board, CurrentPlayer, movement, _, _), 1, Move) :-
-    valid_moves(game(Board, CurrentPlayer, movement), Moves),
+choose_move(game(Board, CurrentPlayer, movement, BoardSize, _), 1, Move) :-
+    valid_moves(game(Board, CurrentPlayer, movement, BoardSize, _), Moves),
     random_member(Move, Moves).
 
 % Level 2: Strategic move
-choose_move(game(Board, CurrentPlayer, movement, _, _), 2, Move) :-
+choose_move(game(Board, CurrentPlayer, movement, BoardSize, _), 2, Move) :-
     CurrentPlayer = pc(_, Color, _),
-    valid_moves(game(Board, CurrentPlayer, movement), Moves),
+    valid_moves(game(Board, CurrentPlayer, movement, BoardSize, _), Moves),
     findall(Value-M, (
         member(M, Moves),
-        simulate_move(Board, M, Color, Value)
+        simulate_move(game(Board, CurrentPlayer, movement, BoardSize, _), M, Color, Value)
     ), ValuedMoves),
     keysort(ValuedMoves, SortedMoves),
     last(SortedMoves, _-Move).
 
 
-% simulate_move(+Board, +Move, +Color, -Value)
+% simulate_move(+GameState, +Move, +Color, -Value)
 % Simulates a move and its value and evaluates its resulting board state.
-simulate_move(Board, move(FromX, FromY, ToX, ToY), Color, Value) :-
+simulate_move(game(Board, _, movement, BoardSize, _), move(FromX, FromY, ToX, ToY), Color, Value) :-
     execute_move(Board, FromX, FromY, ToX, ToY, NewBoard),
-    value(NewBoard, Color, Value).
+    value(game(NewBoard, _, movement, BoardSize, _), Color, Value).
 
 
-% value(+Board, +Color, -Value)
-% Evaluates the board for a given color, considering stack height and mobility.
-value(Board, Color, Value) :-
+% value(+GameState, +Color, -Value)
+% It receives the current game state and color of the current player (it was not considered necessary to include the rest 
+% of the information about the player in the predicate for this evaluation) and finds all the player's stacks and their heights.
+% One of the factors to evaluate (and with the most impact) when calculating the value is the height of the stacks as the 
+% objective of the game is to have the biggest stack. The number of valid moves is also considered because the greater the 
+% mobility, the greater the probability of being able to grow the stack in future moves.
+value(game(Board, _, movement, BoardSize, _), Color, Value) :-
     findall(StackHeight, (
         member(Row, Board),
         member(Stack, Row),
@@ -553,9 +572,9 @@ value(Board, Color, Value) :-
         length(Stack, StackHeight)
     ), Heights),
     max_list(Heights, MaxHeight),
-    findall(Move, valid_moves(game(Board, pc(_, Color, _), movement), Move), MobilityMoves),
+    findall(Move, valid_moves(game(Board, pc(_, Color, _), movement, BoardSize, _), Move), MobilityMoves),
     length(MobilityMoves, MobilityScore),
-    Value is MaxHeight * 10 + MobilityScore. % Stack height is prioritized
+    Value is MaxHeight * 10 + MobilityScore.
 
 
 
@@ -579,18 +598,22 @@ next_player(human(Name, Color2), game_config(pc(Level, Color1, PCName), human(Na
 % ===================== GAME STATE CHECKS =====================
 
 % game_over(+GameState, -Winner)
-% Checks if the game is over (no valid moves for both players) and identifies the winner.
-game_over(game(Board, _, movement, _, GameConfig), Winner) :-
-    % Check if both players have no valid moves
+% Receives the current game status, checks the valid moves for each player. If none of the players have valid moves, 
+% the game ends and the winner is returned. This is determined by comparing in decreasing order the heights of all the stacks 
+% of each player until finding a bigger stack, or the largest number of stacks with the tallest height. 
+% If all stacks of one of the playeres are equal in height to the opponent's stacks, the game ends in a draw.
+game_over(game(Board, _, movement, BoardSize, GameConfig), Winner) :-
     GameConfig = game_config(Player1, Player2, _),
-    valid_moves(game(Board, Player1, movement), Moves1),
-    valid_moves(game(Board, Player2, movement), Moves2),
+    valid_moves(game(Board, Player1, movement, BoardSize, _), Moves1),
+    valid_moves(game(Board, Player2, movement, BoardSize, _), Moves2),
     Moves1 = [],
     Moves2 = [],
     !,
     determine_winner(Board, GameConfig, Winner).
+
+% Continue the game if there are valid moves.
 game_over(_, _) :-
-    fail. % Continue the game if there are valid moves.
+    fail.
 
 
 % determine_winner(+Board, +GameConfig, -Winner)
