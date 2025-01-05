@@ -12,7 +12,7 @@
 % Entry point for the game. Displays the instructions and the menu that allows choosing the board size 
 % and the game type (H/H, H/PC, PC/H, or PC/PC). 
 play :-
-    write('Welcome to STAQS!'), nl,
+    write('Welcome to STAQS!'), nl, nl,
     write('Instructions:'), nl,
     write('1. During the PLACEMENT phase, type "X Y" to place your piece on top of a neutral stack.'), nl,
     write('   Example: "1 1" places your piece at the lower-left corner of the board.'), nl,

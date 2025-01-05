@@ -35,7 +35,18 @@ O jogo inicia-se com o predicado play/0:
 
 
 ## Considerações para Extensões do Jogo
-Neste jogo é permitido escolher tabuleiros de diferentes tamanhos, sendo que o número de peças de cada jogador depende desse tamanho (o número de peças por jogador é igual ao tamanho do tabuleiro menos 1)
+> Neste jogo é permitido escolher tabuleiros de diferentes tamanhos, sendo que o número de peças de cada jogador depende desse tamanho (o número de peças por jogador é igual ao tamanho do tabuleiro menos 1).    
+
+> Além disso, o utilizador pode também escolher entre 4 modos de jogo diferentes:
+* **Humano vs. Humano -** O jogo espera a interação de dois jogadores;
+* **Humano vs. PC -** O jogo espera interação para o primeiro jogador enquanto o segundo jogador é um bot;
+* **PC vs. Humano -** Semelhante à opção anterior mas a ordem de jogadores é trocada;
+* **PC vs. PC -** O jogo é jogado por dois bots.    
+> Para casos em que o PC é escolhido para jogar, o utilizador pode também escolher o seu nível de dificuldade entre duas opções: 
+
+* **1 -** O bot faz jogadas aleatórias tendo em conta todas as opções disponíveis e válidas;   
+* **2 -** O bot utiliza um algoritmo greedy para determinar qual a melhor jogada tendo em conta as opções disponíveis e válidas.    
+> Já para casos em que um ou dois jogadores humanos, cada um destes pode inserir um nome para ser apresentado nas suas jogadas.
 
 
 ## Lógica do Jogo
