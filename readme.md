@@ -54,15 +54,41 @@ Já para casos em que um ou dois jogadores humanos, cada um destes pode inserir 
 ## Lógica do Jogo
 **Representação da Configuração do Jogo**
 
+A configuração do jogo encapsula os detalhes essenciais, como o tipo de jogadores (humano ou computador), tamanho do tabuleiro, nomes dos jogadores e níveis de dificuldade dos bots. Isto é representado como um termo Prolog game_config/3:
+
+``game_config(Player1, Player2, BoardSize)``
+
+* Player1 e Player2 representam os dois jogadores. Para jogadores humanos, inclui o nome do jogador e a cor. Para jogadores controlados pelo computador, inclui o nível de dificuldade, a cor e um identificador predefinido;
+* BoardSize especifica as dimensões do tabuleiro NxN.
+
+Esta configuração é utilizada no predicado initial_state/2 para inicializar o estado inicial do jogo.
 
 **Representação Interna do Estado do Jogo**
 
+O estado do jogo captura toda a informação sobre o jogo num dado momento. É representado como:
+
+``game(Board, CurrentPlayer, Phase, BoardSize, GameConfig)``
+
+* Board: Uma lista de listas, onde cada elemento representa uma célula do tabuleiro. As células contêm pilhas (listas) de peças (neutral, blue ou white);
+* CurrentPlayer: O jogador que está atualmente a jogar;
+* Phase: Indica se o jogo está na fase de "posicionamento" ou "movimento";
+* BoardSize: Dimensão do tabuleiro (ex.: 5 para um tabuleiro 5x5);
+* GameConfig: Contém os detalhes dos dois jogadores e o tamanho do tabuleiro.
 
 **Representação das jogadas**
 
+Os movimentos são representados como um termo Prolog:
+
+``move(FromX, FromY, ToX, ToY)``
+
+* FromX, FromY: Coordenadas da pilha que será movida;
+* ToX, ToY: Coordenadas de destino. Esta representação é utilizada no predicado move/3 para validação e execução dos movimentos.
 
 **Interação do utilizador**
 
+O sistema de interação do jogo começa no menu principal, onde os jogadores inserem o tamanho do tabuleiro (entre 3 e 9) e escolhem o modo de jogo: H/H, H/PC, PC/H ou PC/PC. Além disso, dependendo do modo selecionado, é solicitado o nome dos jogadores humanos e o nível de dificuldade do computador (1 ou 2). Todas essas entradas são validadas para garantir que estão dentro dos limites definidos.
+
+Durante o jogo, os inputs mudam conforme a fase. Na fase de colocação, os jogadores inserem coordenadas (X, Y) para posicionar peças em pilhas neutras. Na fase de movimento, os jogadores inserem coordenadas (FromX, FromY, ToX, ToY) para mover pilhas para células adjacentes válidas. O sistema verifica automaticamente se os inputs estão dentro dos limites do tabuleiro, se a jogada segue as regras (ex.: destino válido) e, em caso de erro, exibe mensagens explicativas e solicita nova entrada.
 
 
 
