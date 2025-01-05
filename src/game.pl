@@ -99,7 +99,7 @@ create_row(Size, Row) :-
 
 % display_game(+GameState)
 % Displays the game board with labeled rows and columns.
-display_game(game(Board, CurrentPlayer, Phase, BoardSize, GameConfig)) :-
+display_game(game(Board, CurrentPlayer, Phase, BoardSize, _)) :-
     nl,
     write('Current Player: '),
     display_current_player(CurrentPlayer), nl,
@@ -250,11 +250,10 @@ process_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), 
     add_player_piece(Board, X, Y, CurrentPlayer, NewBoard),
     pieces_per_player(BoardSize, PiecesPerPlayer),
     \+ all_pieces_placed(NewBoard, PiecesPerPlayer),
-    next_player(CurrentPlayer, GameConfig, NextPlayer).
+    next_player(CurrentPlayer, GameConfig, NextPlayer), !.
 
 % Case in which a piece is placed in an invalid position.
-process_placement(game(Board, CurrentPlayer, placement, BoardSize, GameConfig), _, _, Board, CurrentPlayer, placement) :-
-    \+ valid_placement(Board, X, Y),
+process_placement(game(Board, CurrentPlayer, placement, _, _), _, _, Board, CurrentPlayer, placement) :-
     write('Invalid placement! Ensure it is on a neutral stack. Try again.'), nl.
 
 
@@ -275,23 +274,23 @@ handle_movement_moves([], game(Board, CurrentPlayer, movement, BoardSize, GameCo
     handle_pass_end(Board, NextPlayer, movement, BoardSize, GameConfig, NewPassCount).
 
 % Cases where valid moves exist.
-handle_movement_moves(Moves, GameState, _) :-
+handle_movement_moves(_, GameState, _) :-
     GameState = game(_, CurrentPlayer, _, _, _),
-    handle_player_move(Moves, CurrentPlayer, GameState).
+    handle_player_move(CurrentPlayer, GameState).
 
 
 % handle_pass_end(+Board, +NextPlayer, +Phase, +BoardSize, +GameConfig, +PassCount)
 % Ends the game if both players pass consecutively (when passes reach 2) or continues to the next player.
 handle_pass_end(Board, NextPlayer, Phase, BoardSize, GameConfig, 2) :-
-    game_over(game(Board, NextPlayer, Phase, BoardSize, GameConfig), Winner), !.
+    game_over(game(Board, NextPlayer, Phase, BoardSize, GameConfig), _), !.
 handle_pass_end(Board, NextPlayer, Phase, BoardSize, GameConfig, PassCount) :-
     game_loop(game(Board, NextPlayer, Phase, BoardSize, GameConfig), PassCount).
 
 
-% handle_player_move(+Moves, +CurrentPlayer, +GameState)
+% handle_player_move(+CurrentPlayer, +GameState)
 % Handles the current player's move during the movement phase.
 % For PC player
-handle_player_move(Moves, pc(Level, Color, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
+handle_player_move(pc(Level, _, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
     CurrentPlayer = pc(Level, _, Name),
     write(Name), write(' is thinking...'), nl,
     sleep(2),
@@ -302,7 +301,7 @@ handle_player_move(Moves, pc(Level, Color, _), game(Board, CurrentPlayer, moveme
     game_loop(NewGameState, 0).
 
 % For Human player
-handle_player_move(_, human(_, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
+handle_player_move(human(_, _), game(Board, CurrentPlayer, movement, BoardSize, GameConfig)) :-
     write('MOVE YOUR STACK'), nl,
     write('Instructions: Choose a move (FromX FromY ToX ToY).'), nl,
     read_move(FromX, FromY, ToX, ToY, BoardSize),
@@ -310,7 +309,7 @@ handle_player_move(_, human(_, _), game(Board, CurrentPlayer, movement, BoardSiz
     game_loop(NewGameState, 0).
 
 % For invalid moves - retrying the turn.
-handle_player_move(_, _, GameState) :-
+handle_player_move(_, GameState) :-
     write('Invalid move! Ensure it follows the rules. Try again.'), nl,
     handle_movement(GameState, 0).
 
@@ -448,7 +447,7 @@ choose_placement(game(Board, _, _, _, _), 1, X, Y) :-
 
 % Level 2: Strategic Placement
 choose_placement(game(Board, CurrentPlayer, _, _, _), 2, X, Y) :-
-    player_color(Player, Color),    
+    player_color(CurrentPlayer, Color),    
     findall((Row, Col), (
         between(1, 5, Row),
         between(1, 5, Col),
@@ -643,10 +642,10 @@ extract_stack_heights(Board, Color, Heights) :-
 % compare_stacks(+BlueStacks, +WhiteStacks, -Winner)
 % Compares the list of stacks heights of two players to determine the winner.
 compare_stacks([], [], draw). 
-compare_stacks([H1|T1], [H2|T2], Winner) :-
+compare_stacks([H1|_], [H2|_], Winner) :-
     H1 > H2,
     Winner = blue.
-compare_stacks([H1|T1], [H2|T2], Winner) :-
+compare_stacks([H1|_], [H2|_], Winner) :-
     H1 < H2,
     Winner = white.
 compare_stacks([H1|T1], [H2|T2], Winner) :-
